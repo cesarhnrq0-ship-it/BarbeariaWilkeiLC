@@ -284,7 +284,7 @@ button.del-btn {
   text-transform: uppercase;
 }
 
-/* UI ADMIN NOVO E ORGANIZADO */
+/* UI ADMIN ORGANIZADO */
 .admin-tabs {
   display: flex;
   gap: 8px;
@@ -871,7 +871,7 @@ function cancelByClient(){
 }
 
 function deleteBooking(dateKey, timeKey, isClient){
-  if(confirm("Tem certeza que deseja cancelar e liberar esse horário?")){
+  if(confirm("Tem certeza que deseja remover este item e liberar a agenda?")){
     if(db){
       db.ref('agendamentos/' + dateKey + '/' + timeKey).once('value').then(function(snap){
         var item = snap.val();
@@ -883,7 +883,7 @@ function deleteBooking(dateKey, timeKey, isClient){
           if(item){
             for(var tk in dayData){
               var dItem = dayData[tk];
-              if(dItem && dItem.nome === item.nome && dItem.hora === item.hora){
+              if(dItem && dItem.nome === item.nome && (item.nome === "🚫 DIA BLOQUEADO" || dItem.hora === item.hora)){
                 removes[tk] = null;
               }
             }
@@ -891,7 +891,7 @@ function deleteBooking(dateKey, timeKey, isClient){
           removes[timeKey] = null;
 
           db.ref('agendamentos/' + dateKey).update(removes).then(function(){
-            alert("Agendamento removido e horário liberado!");
+            alert("Removido e horário/dia liberado com sucesso!");
             if(isClient) start(); else loadAdminPanel();
           });
         });
@@ -1050,7 +1050,7 @@ function blockSlotOrDay(){
       }
       db.ref('agendamentos/' + dateVal).update(updates).then(function(){
         alert("Dia " + dateLabel + " bloqueado com sucesso!");
-        switchAdminTab('list');
+        switchAdminTab('block');
       });
     }
   } else {
@@ -1066,7 +1066,7 @@ function blockSlotOrDay(){
       duracao: 30
     }).then(function(){
       alert("Horário " + timeVal + " do dia " + dateLabel + " bloqueado com sucesso!");
-      switchAdminTab('list');
+      switchAdminTab('block');
     });
   }
 }
@@ -1087,28 +1087,78 @@ function loadAdminPanel(){
                "<div class='admin-tab " + (activeAdminTab === 'block' ? 'active' : '') + "' onclick=\"switchAdminTab('block')\">🚫 Bloquear / Folga</div>" +
              "</div>";
 
+  ctl.innerHTML = "<button class='send' onclick='start()'>Voltar ao Início</button>";
+
+  // ABA 2: BLOQUEAR / FOLGA
   if(activeAdminTab === 'block') {
-    html += "<div class='admin-card' style='border-color:var(--accent);'>" +
-              "<div class='admin-card-head'><span style='color:var(--accent); font-weight:800;'>🔒 Bloquear Horário / Folga</span></div>" +
-              "<div class='admin-card-body'>" +
-                "<label style='font-weight:600; font-size:12px;'>Data para bloquear:</label>" +
-                "<input type='date' id='block-date' value='" + todayIso + "' style='margin-bottom:10px;'>" +
-                "<label style='font-weight:600; font-size:12px;'>Horário:</label>" +
-                "<select id='block-time' style='margin-bottom:14px;'>" +
-                  "<option value='ALL'>⚠️ Bloquear O DIA INTEIRO</option>" +
-                  generateAdminTimeOptions() +
-                "</select>" +
-                "<button class='send' onclick='blockSlotOrDay()'>🔒 CONFIRMAR BLOQUEIO</button>" +
-              "</div>" +
-            "</div>";
-    log.innerHTML = html;
-    ctl.innerHTML = "<button class='send' onclick='start()'>Voltar ao Início</button>";
+    var blockFormHtml = "<div class='admin-card' style='border-color:var(--accent);'>" +
+                          "<div class='admin-card-head'><span style='color:var(--accent); font-weight:800;'>🔒 Novo Bloqueio de Horário ou Folga</span></div>" +
+                          "<div class='admin-card-body'>" +
+                            "<label style='font-weight:600; font-size:12px;'>Data para bloquear:</label>" +
+                            "<input type='date' id='block-date' value='" + todayIso + "' style='margin-bottom:10px;'>" +
+                            "<label style='font-weight:600; font-size:12px;'>Horário:</label>" +
+                            "<select id='block-time' style='margin-bottom:14px;'>" +
+                              "<option value='ALL'>⚠️ Bloquear O DIA INTEIRO (Folga)</option>" +
+                              generateAdminTimeOptions() +
+                            "</select>" +
+                            "<button class='send' onclick='blockSlotOrDay()'>🔒 CONFIRMAR BLOQUEIO</button>" +
+                          "</div>" +
+                        "</div>" +
+                        "<h4 style='margin: 18px 0 10px; color:var(--mute); text-transform:uppercase;'>Bloqueios e Folgas Ativos</h4>" +
+                        "<p id='block-status' style='color:var(--mute); font-size:14px;'>🔍 Buscando bloqueios...</p>";
+
+    log.innerHTML = html + blockFormHtml;
+
+    if(!db){
+      document.getElementById('block-status').outerHTML = "<p>Banco de dados offline.</p>";
+      return;
+    }
+
+    db.ref('agendamentos').once('value').then(function(snapshot){
+      var data = snapshot.val();
+      var blockStatusElem = document.getElementById('block-status');
+      if(!data){
+        blockStatusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum bloqueio ou folga ativa no momento.</p>";
+        return;
+      }
+
+      var blocksHtml = "";
+      var seenBlocks = {};
+
+      for(var day in data){
+        for(var time in data[day]){
+          var item = data[day][time];
+          if(!item || !item.bloqueado) continue; // MOSTRA APENAS BLOQUEADOS/FOLGAS NESTA ABA!
+
+          var isFullDay = (item.nome === "🚫 DIA BLOQUEADO");
+          var blockKey = isFullDay ? (day + "_FULL") : (day + "_" + time);
+
+          if(seenBlocks[blockKey]) continue;
+          seenBlocks[blockKey] = true;
+
+          blocksHtml += "<div class='admin-card' style='border-color:var(--danger); background:rgba(255,71,87,0.06);'>" +
+                          "<div class='admin-card-head'>" +
+                            "<span class='admin-card-time' style='color:var(--danger);'>" + (isFullDay ? "📅 " + item.data + " (Dia Inteiro)" : "⏰ " + item.data + " às " + item.hora) + "</span>" +
+                            "<span class='admin-card-badge' style='background:rgba(255,71,87,0.2); color:var(--danger);'>FECHADO</span>" +
+                          "</div>" +
+                          "<div class='admin-card-body'>" +
+                            "<b>Status:</b> " + (isFullDay ? "Folga / Dia Fechado" : "Horário Indisponível") +
+                          "</div>" +
+                          "<div class='admin-card-actions'>" +
+                            "<button class='btn-admin-act btn-act-del' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">🔓 Desbloquear</button>" +
+                          "</div>" +
+                        "</div>";
+        }
+      }
+
+      blockStatusElem.outerHTML = blocksHtml || "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum bloqueio ou folga ativa no momento.</p>";
+    });
     return;
   }
 
-  html += "<p id='admin-status' style='color:var(--mute); font-size:14px;'>🔍 Buscando agendamentos...</p>";
-  log.innerHTML = html;
-  ctl.innerHTML = "<button class='send' onclick='start()'>Voltar ao Início</button>";
+  // ABA 1: AGENDAMENTOS (SOMENTE CLIENTES REAL)
+  var listHtml = "<p id='admin-status' style='color:var(--mute); font-size:14px;'>🔍 Buscando agendamentos...</p>";
+  log.innerHTML = html + listHtml;
 
   if(!db){
     document.getElementById('admin-status').outerHTML = "<p>Banco de dados offline.</p>";
@@ -1127,15 +1177,12 @@ function loadAdminPanel(){
     var seen = {};
     var datesMap = {};
 
-    // Organizar por Data
     for(var day in data){
       for(var time in data[day]){
         var item = data[day][time];
-        if(!item) continue;
+        if(!item || item.bloqueado) continue; // IGNORA BLOQUEIOS E FOLGAS NESTA ABA!
 
-        var isBlocked = item.bloqueado;
-        var uniqueKey = day + "_" + (isBlocked ? time : (item.nome + "_" + item.hora));
-        
+        var uniqueKey = day + "_" + item.nome + "_" + item.hora;
         if(seen[uniqueKey]) continue;
         seen[uniqueKey] = true;
 
@@ -1147,7 +1194,7 @@ function loadAdminPanel(){
     var sortedDays = Object.keys(datesMap).sort();
 
     if(sortedDays.length === 0){
-      statusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento ativo.</p>";
+      statusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento de cliente ativo.</p>";
       return;
     }
 
@@ -1161,14 +1208,13 @@ function loadAdminPanel(){
       dayItems.forEach(function(obj){
         var item = obj.item;
         var time = obj.timeKey;
-        var isBlocked = item.bloqueado;
         var itemJson = encodeURIComponent(JSON.stringify(item));
         var cleanTel = item.tel ? item.tel.replace(/\D/g,"") : "";
 
-        cardsHtml += "<div class='admin-card' " + (isBlocked ? "style='border-color:var(--danger); background:rgba(255,71,87,0.06);'" : "") + ">" +
+        cardsHtml += "<div class='admin-card'>" +
                       "<div class='admin-card-head'>" +
-                        "<span class='admin-card-time' " + (isBlocked ? "style='color:var(--danger);'" : "") + ">⏰ " + item.hora + "</span>" +
-                        "<span class='admin-card-badge' " + (isBlocked ? "style='background:rgba(255,71,87,0.2); color:var(--danger);'" : "") + ">" + (isBlocked ? "FECHADO" : "R$ " + (item.preco || 0)) + "</span>" +
+                        "<span class='admin-card-time'>⏰ " + item.hora + "</span>" +
+                        "<span class='admin-card-badge'>R$ " + (item.preco || 0) + "</span>" +
                       "</div>" +
                       "<div class='admin-card-body'>" +
                         "<b>Cliente:</b> " + item.nome + "<br>" +
@@ -1176,9 +1222,9 @@ function loadAdminPanel(){
                         "<b>WhatsApp:</b> " + (item.tel || "-") +
                       "</div>" +
                       "<div class='admin-card-actions'>" +
-                        (!isBlocked && cleanTel ? "<a href='https://wa.me/55" + cleanTel + "' target='_blank' class='btn-admin-act btn-act-wa'>💬 WhatsApp</a>" : "") +
-                        (!isBlocked ? "<button class='btn-admin-act btn-act-edit' onclick=\"openEditModal('"+dayKey+"','"+time+"','"+itemJson+"')\">✏️ Editar</button>" : "") +
-                        "<button class='btn-admin-act btn-act-del' onclick=\"deleteBooking('"+dayKey+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear" : "🗑️ Liberar") + "</button>" +
+                        (cleanTel ? "<a href='https://wa.me/55" + cleanTel + "' target='_blank' class='btn-admin-act btn-act-wa'>💬 WhatsApp</a>" : "") +
+                        "<button class='btn-admin-act btn-act-edit' onclick=\"openEditModal('"+dayKey+"','"+time+"','"+itemJson+"')\">✏️ Editar</button>" +
+                        "<button class='btn-admin-act btn-act-del' onclick=\"deleteBooking('"+dayKey+"','"+time+"',false)\">🗑️ Cancelar</button>" +
                       "</div>" +
                     "</div>";
       });
