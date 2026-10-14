@@ -402,7 +402,7 @@ button.del-btn {
 <!-- Modal Editar Agendamento -->
 <div id="modal-edit">
   <div class="modal-content">
-    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Editar Agendamento</b>
+    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Mudar Horário / Tempo</b>
     <p id="edit-info" style="font-size:13px; color:var(--mute); margin:0;"></p>
     
     <label style="font-size:12px; font-weight:600;">Nova Data:</label>
@@ -411,12 +411,13 @@ button.del-btn {
     <label style="font-size:12px; font-weight:600;">Novo Horário de Início:</label>
     <select id="edit-new-time"></select>
 
-    <label style="font-size:12px; font-weight:600;">Tempo do Atendimento:</label>
+    <label style="font-size:12px; font-weight:600;">Quanto tempo ESTE cliente vai demorar?:</label>
     <select id="edit-new-duration">
-      <option value="15">15 minutos (Rápido / Pezinho)</option>
-      <option value="30">30 minutos (Padrão)</option>
+      <option value="15">15 minutos (Rápido / Criança / Pezinho)</option>
+      <option value="20">20 minutos (Corte Rápido)</option>
+      <option value="30">30 minutos (Atendimento Padrão)</option>
       <option value="40">40 minutos (Corte + Sobrancelha)</option>
-      <option value="45">45 minutos</option>
+      <option value="45">45 minutos (Cliente Demorado)</option>
       <option value="60">60 minutos (1 hora - Corte e Barba)</option>
     </select>
 
@@ -441,7 +442,7 @@ var SALON = "5511989448738";
 var ADMIN_PASS = "123456";
 var currentEditData = null;
 
-// [Serviço, Preço, Duração em Minutos]
+// [Serviço, Preço, Duração Padrão em Minutos]
 var SV = [
   ["Corte masculino", 40, 30], 
   ["Corte com sobrancelha", 45, 40], 
@@ -831,7 +832,7 @@ function openEditModal(oldDay, oldTimeKey, itemJsonStr){
     document.getElementById("edit-new-date").value = oldDay;
     
     var selectTime = document.getElementById("edit-new-time");
-    selectTime.innerHTML = generateTimeOptions();
+    selectTime.innerHTML = generateAdminTimeOptions();
     selectTime.value = item.hora || "10:00";
 
     var selectDur = document.getElementById("edit-new-duration");
@@ -931,9 +932,10 @@ function checkAdminPass(){
   }
 }
 
-function generateTimeOptions(){
+// Opções do Admin de 10 em 10 minutos para encaixes perfeitos (12:00, 12:10, 12:20, 12:30, 12:40...)
+function generateAdminTimeOptions(){
   var opt = "";
-  for(var m=8*60+30; m<=19*60+30; m+=15){
+  for(var m=8*60+30; m<=19*60+30; m+=10){
     var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
     opt += "<option value='" + t + "'>" + t + "</option>";
   }
@@ -1010,7 +1012,7 @@ function loadAdminPanel(){
                  "<label style='font-weight:600; font-size:13px;'>Horário:</label>" +
                  "<select id='block-time' style='margin-bottom:12px;'>" +
                    "<option value='ALL'>⚠️ Bloquear O DIA INTEIRO</option>" +
-                   generateTimeOptions() +
+                   generateAdminTimeOptions() +
                  "</select>" +
                  "<button class='send' onclick='blockSlotOrDay()'>🔒 CONFIRMAR BLOQUEIO</button>" +
                "</div>" +
