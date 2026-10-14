@@ -399,10 +399,10 @@ button.del-btn {
   </div>
 </div>
 
-<!-- Modal Editar Agendamento -->
+<!-- Modal Editar Agendamento / Tempo Extra -->
 <div id="modal-edit">
   <div class="modal-content">
-    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Mudar Horário / Tempo</b>
+    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Horário / Tempo Extra</b>
     <p id="edit-info" style="font-size:13px; color:var(--mute); margin:0;"></p>
     
     <label style="font-size:12px; font-weight:600;">Nova Data:</label>
@@ -411,14 +411,17 @@ button.del-btn {
     <label style="font-size:12px; font-weight:600;">Novo Horário de Início:</label>
     <select id="edit-new-time"></select>
 
-    <label style="font-size:12px; font-weight:600;">Quanto tempo ESTE cliente vai demorar?:</label>
+    <label style="font-size:12px; font-weight:600;">Tempo de Atendimento (Com Extra):</label>
     <select id="edit-new-duration">
-      <option value="15">15 minutos (Rápido / Criança / Pezinho)</option>
-      <option value="20">20 minutos (Corte Rápido)</option>
-      <option value="30">30 minutos (Atendimento Padrão)</option>
-      <option value="40">40 minutos (Corte + Sobrancelha)</option>
-      <option value="45">45 minutos (Cliente Demorado)</option>
-      <option value="60">60 minutos (1 hora - Corte e Barba)</option>
+      <option value="15">15 min (-15 min extra / Pezinho)</option>
+      <option value="20">20 min (-10 min extra / Criança Rápida)</option>
+      <option value="30">30 min (Atendimento Padrão)</option>
+      <option value="40">40 min (+10 min extra)</option>
+      <option value="45">45 min (+15 min extra)</option>
+      <option value="50">50 min (+20 min extra)</option>
+      <option value="60">60 min (+30 min extra / 1 Hora)</option>
+      <option value="75">75 min (+45 min extra)</option>
+      <option value="90">90 min (+60 min extra / 1h30)</option>
     </select>
 
     <button class="send" onclick="confirmMoveBooking()">💾 Salvar Alterações</button>
@@ -453,6 +456,16 @@ var SV = [
 var DOW = ["dom","seg","ter","qua","qui","sex","sáb"], MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 var S = {}; 
 var log = document.getElementById("log"), ctl = document.getElementById("ctl");
+
+function parseMins(tStr){
+  if(!tStr) return 0;
+  if(typeof tStr === 'number') return tStr;
+  if(tStr.length === 4 && tStr.indexOf(":") === -1){
+    tStr = tStr.substring(0,2) + ":" + tStr.substring(2,4);
+  }
+  var p = tStr.split(":");
+  return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+}
 
 function say(t,who){
   var d=document.createElement("div");d.className="m "+(who||"bot");d.textContent=t;log.appendChild(d);
@@ -582,19 +595,25 @@ function pickTime(){
       var now = new Date(); 
       var items = [];
       var duration = S.svc ? S.svc[2] : 30;
-      var slotsNeeded = Math.ceil(duration / 15);
 
-      for(var m = startMin; m <= endMin; m += 15){
+      // GRADE PÚBLICA DE 30 EM 30 MINUTOS
+      for(var m = startMin; m <= endMin; m += 30){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var past = (iso(now) === dateKey) && (m <= (now.getHours()*60 + now.getMinutes()));
 
         var isBooked = false;
-        for(var s = 0; s < slotsNeeded; s++){
-          var subM = m + (s * 15);
-          if(subM > endMin) { isBooked = true; break; }
-          var subT = String(Math.floor(subM/60)).padStart(2,"0") + ":" + String(subM%60).padStart(2,"0");
-          var subKey = subT.replace(":", "");
-          if(booked[subKey]) { isBooked = true; break; }
+        // Verifica se a janela deste agendamento [m, m + duration] colide com algum agendamento do banco
+        for(var k in booked){
+          var bItem = booked[k];
+          if(!bItem) continue;
+          var bStart = parseMins(bItem.hora || k);
+          var bDur = bItem.duracao || (bItem.servico === "Corte e barba" ? 60 : (bItem.servico === "Corte com sobrancelha" ? 40 : 30));
+          var bEnd = bStart + bDur;
+
+          if(Math.max(m, bStart) < Math.min(m + duration, bEnd)){
+            isBooked = true;
+            break;
+          }
         }
 
         items.push({
@@ -641,27 +660,19 @@ function confirm2(){
 function saveAndFinish(){
   var dateKey = iso(S.date);
   var duration = S.svc ? S.svc[2] : 30;
-  var slotsNeeded = Math.ceil(duration / 15);
-  var startMin = parseInt(S.time.split(":")[0]) * 60 + parseInt(S.time.split(":")[1]);
+  var timeKey = S.time.replace(":","");
 
   if(db){
     try {
-      var updates = {};
-      for(var i = 0; i < slotsNeeded; i++) {
-        var currMin = startMin + (i * 15);
-        var tStr = String(Math.floor(currMin/60)).padStart(2,"0") + ":" + String(currMin%60).padStart(2,"0");
-        var timeKey = tStr.replace(":", "");
-        updates[timeKey] = {
-          nome: S.nome, 
-          tel: S.tel, 
-          servico: S.svc[0], 
-          preco: S.svc[1], 
-          data: lbl(S.date), 
-          hora: S.time,
-          duracao: duration
-        };
-      }
-      db.ref('agendamentos/' + dateKey).update(updates);
+      db.ref('agendamentos/' + dateKey + '/' + timeKey).set({
+        nome: S.nome, 
+        tel: S.tel, 
+        servico: S.svc[0], 
+        preco: S.svc[1], 
+        data: lbl(S.date), 
+        hora: S.time,
+        duracao: duration
+      });
     } catch(e){}
   }
   
@@ -754,13 +765,18 @@ function cancelByClient(){
     db.ref('agendamentos').once('value').then(function(snapshot){
       var data = snapshot.val();
       var found = [];
+      var seenBooking = {};
 
       if(data){
         for(var day in data){
           for(var time in data[day]){
             var item = data[day][time];
-            if(item.tel && item.tel.replace(/\D/g,"") === searchTel){
-              found.push({day: day, time: time, info: item});
+            if(item && item.tel && item.tel.replace(/\D/g,"") === searchTel){
+              var key = day + "_" + item.nome + "_" + (item.hora || time);
+              if(!seenBooking[key]){
+                seenBooking[key] = true;
+                found.push({day: day, time: time, info: item});
+              }
             }
           }
         }
@@ -794,28 +810,26 @@ function deleteBooking(dateKey, timeKey, isClient){
     if(db){
       db.ref('agendamentos/' + dateKey + '/' + timeKey).once('value').then(function(snap){
         var item = snap.val();
-        if(!item){
-          db.ref('agendamentos/' + dateKey + '/' + timeKey).remove();
-          if(isClient) start(); else loadAdminPanel();
-          return;
-        }
-
+        
         db.ref('agendamentos/' + dateKey).once('value').then(function(daySnap){
           var dayData = daySnap.val() || {};
           var removes = {};
-          for(var tk in dayData){
-            if(dayData[tk].nome === item.nome && dayData[tk].hora === item.hora){
-              removes[tk] = null;
+
+          if(item){
+            for(var tk in dayData){
+              var dItem = dayData[tk];
+              if(dItem && dItem.nome === item.nome && dItem.hora === item.hora){
+                removes[tk] = null;
+              }
             }
           }
-          if(Object.keys(removes).length === 0) removes[timeKey] = null;
+          removes[timeKey] = null;
+
           db.ref('agendamentos/' + dateKey).update(removes).then(function(){
-            alert("Agendamento ou bloqueio removido!");
+            alert("Agendamento removido e horário liberado!");
             if(isClient) start(); else loadAdminPanel();
           });
         });
-      }).catch(function(err){
-        alert("Erro ao remover: " + err.message);
       });
     } else {
       alert("Erro de conexão com o banco de dados.");
@@ -862,46 +876,39 @@ function confirmMoveBooking(){
   }
 
   var oldDay = currentEditData.oldDay;
+  var oldTimeKey = currentEditData.oldTimeKey;
   var oldItem = currentEditData.item;
 
   var parts = newDate.split("-");
   var dtObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
   var newLabel = lbl(dtObj);
+  var newTimeKey = newTime.replace(":", "");
 
   if(db){
     db.ref('agendamentos/' + oldDay).once('value').then(function(snapshot){
       var oldDayData = snapshot.val() || {};
       var removes = {};
+
       for(var tk in oldDayData){
-        if(oldDayData[tk].nome === oldItem.nome && oldDayData[tk].hora === oldItem.hora){
+        if(oldDayData[tk] && oldDayData[tk].nome === oldItem.nome && oldDayData[tk].hora === oldItem.hora){
           removes[tk] = null;
         }
       }
+      removes[oldTimeKey] = null;
 
-      var pRemove = Object.keys(removes).length > 0 ? db.ref('agendamentos/' + oldDay).update(removes) : Promise.resolve();
+      db.ref('agendamentos/' + oldDay).update(removes).then(function(){
+        var updateData = {
+          nome: oldItem.nome, 
+          tel: oldItem.tel, 
+          servico: oldItem.servico, 
+          preco: oldItem.preco, 
+          data: newLabel, 
+          hora: newTime,
+          duracao: newDur
+        };
 
-      pRemove.then(function(){
-        var slotsNeeded = Math.ceil(newDur / 15);
-        var startMin = parseInt(newTime.split(":")[0]) * 60 + parseInt(newTime.split(":")[1]);
-        var updates = {};
-
-        for(var i = 0; i < slotsNeeded; i++) {
-          var currMin = startMin + (i * 15);
-          var tStr = String(Math.floor(currMin/60)).padStart(2,"0") + ":" + String(currMin%60).padStart(2,"0");
-          var timeKey = tStr.replace(":", "");
-          updates[timeKey] = {
-            nome: oldItem.nome, 
-            tel: oldItem.tel, 
-            servico: oldItem.servico, 
-            preco: oldItem.preco, 
-            data: newLabel, 
-            hora: newTime,
-            duracao: newDur
-          };
-        }
-
-        db.ref('agendamentos/' + newDate).update(updates).then(function(){
-          alert("Agendamento alterado com sucesso!");
+        db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(updateData).then(function(){
+          alert("Agendamento alterado para " + newLabel + " às " + newTime + " com duração de " + newDur + " min!");
           closeEditModal();
           loadAdminPanel();
         });
@@ -932,10 +939,10 @@ function checkAdminPass(){
   }
 }
 
-// Opções do Admin de 10 em 10 minutos para encaixes perfeitos (12:00, 12:10, 12:20, 12:30, 12:40...)
+// Opções de Horários para o Barbeiro (com encaixes de 15 min no Admin)
 function generateAdminTimeOptions(){
   var opt = "";
-  for(var m=8*60+30; m<=19*60+30; m+=10){
+  for(var m=8*60+30; m<=19*60+30; m+=15){
     var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
     opt += "<option value='" + t + "'>" + t + "</option>";
   }
@@ -963,7 +970,7 @@ function blockSlotOrDay(){
   if(timeVal === "ALL"){
     if(confirm("Tem certeza que deseja BLOQUEAR O DIA INTEIRO (" + dateLabel + ")?")){
       var updates = {};
-      for(var m=8*60+30; m<=19*60+30; m+=15){
+      for(var m=8*60+30; m<=19*60+30; m+=30){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var tk = t.replace(":", "");
         updates[tk] = {
@@ -974,7 +981,7 @@ function blockSlotOrDay(){
           data: dateLabel,
           hora: t,
           bloqueado: true,
-          duracao: 15
+          duracao: 30
         };
       }
       db.ref('agendamentos/' + dateVal).update(updates).then(function(){
@@ -992,7 +999,7 @@ function blockSlotOrDay(){
       data: dateLabel,
       hora: timeVal,
       bloqueado: true,
-      duracao: 15
+      duracao: 30
     }).then(function(){
       alert("Horário " + timeVal + " do dia " + dateLabel + " bloqueado com sucesso!");
       loadAdminPanel();
@@ -1042,6 +1049,7 @@ function loadAdminPanel(){
     for(var day in data){
       for(var time in data[day]){
         var item = data[day][time];
+        if(!item) continue;
         var isBlocked = item.bloqueado;
 
         var uniqueKey = day + "_" + (isBlocked ? time : (item.nome + "_" + item.hora));
@@ -1058,7 +1066,7 @@ function loadAdminPanel(){
                         "<b>WhatsApp:</b> " + item.tel +
                       "</div>" +
                       "<div style='display:flex; gap:8px; margin-top:8px;'>" +
-                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"openEditModal('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário/Tempo</button>" : "") +
+                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"openEditModal('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário / Tempo Extra</button>" : "") +
                         "<button class='btn-card-del' style='margin-top:0;' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear" : "🗑️ Liberar") + "</button>" +
                       "</div>" +
                     "</div>";
