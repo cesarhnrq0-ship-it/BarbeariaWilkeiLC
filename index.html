@@ -402,14 +402,23 @@ button.del-btn {
 <!-- Modal Editar Agendamento -->
 <div id="modal-edit">
   <div class="modal-content">
-    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Mudar Horário</b>
+    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Editar Agendamento</b>
     <p id="edit-info" style="font-size:13px; color:var(--mute); margin:0;"></p>
     
     <label style="font-size:12px; font-weight:600;">Nova Data:</label>
     <input type="date" id="edit-new-date">
 
-    <label style="font-size:12px; font-weight:600;">Novo Horário:</label>
+    <label style="font-size:12px; font-weight:600;">Novo Horário de Início:</label>
     <select id="edit-new-time"></select>
+
+    <label style="font-size:12px; font-weight:600;">Tempo do Atendimento:</label>
+    <select id="edit-new-duration">
+      <option value="15">15 minutos (Rápido / Pezinho)</option>
+      <option value="30">30 minutos (Padrão)</option>
+      <option value="40">40 minutos (Corte + Sobrancelha)</option>
+      <option value="45">45 minutos</option>
+      <option value="60">60 minutos (1 hora - Corte e Barba)</option>
+    </select>
 
     <button class="send" onclick="confirmMoveBooking()">💾 Salvar Alterações</button>
     <button class="admin-btn" onclick="closeEditModal()">Cancelar</button>
@@ -438,7 +447,7 @@ var SV = [
   ["Corte com sobrancelha", 45, 40], 
   ["Barba", 30, 30], 
   ["Corte e barba", 65, 60], 
-  ["Pezinho", 15, 15] // 15 min de duração
+  ["Pezinho", 15, 15]
 ];
 var DOW = ["dom","seg","ter","qua","qui","sex","sáb"], MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 var S = {}; 
@@ -572,15 +581,15 @@ function pickTime(){
       var now = new Date(); 
       var items = [];
       var duration = S.svc ? S.svc[2] : 30;
-      var slotsNeeded = Math.ceil(duration / 30);
+      var slotsNeeded = Math.ceil(duration / 15);
 
-      for(var m = startMin; m <= endMin; m += 30){
+      for(var m = startMin; m <= endMin; m += 15){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var past = (iso(now) === dateKey) && (m <= (now.getHours()*60 + now.getMinutes()));
 
         var isBooked = false;
         for(var s = 0; s < slotsNeeded; s++){
-          var subM = m + (s * 30);
+          var subM = m + (s * 15);
           if(subM > endMin) { isBooked = true; break; }
           var subT = String(Math.floor(subM/60)).padStart(2,"0") + ":" + String(subM%60).padStart(2,"0");
           var subKey = subT.replace(":", "");
@@ -631,14 +640,14 @@ function confirm2(){
 function saveAndFinish(){
   var dateKey = iso(S.date);
   var duration = S.svc ? S.svc[2] : 30;
-  var slotsNeeded = Math.ceil(duration / 30);
+  var slotsNeeded = Math.ceil(duration / 15);
   var startMin = parseInt(S.time.split(":")[0]) * 60 + parseInt(S.time.split(":")[1]);
 
   if(db){
     try {
       var updates = {};
       for(var i = 0; i < slotsNeeded; i++) {
-        var currMin = startMin + (i * 30);
+        var currMin = startMin + (i * 15);
         var tStr = String(Math.floor(currMin/60)).padStart(2,"0") + ":" + String(currMin%60).padStart(2,"0");
         var timeKey = tStr.replace(":", "");
         updates[timeKey] = {
@@ -647,7 +656,8 @@ function saveAndFinish(){
           servico: S.svc[0], 
           preco: S.svc[1], 
           data: lbl(S.date), 
-          hora: S.time
+          hora: S.time,
+          duracao: duration
         };
       }
       db.ref('agendamentos/' + dateKey).update(updates);
@@ -781,9 +791,28 @@ function cancelByClient(){
 function deleteBooking(dateKey, timeKey, isClient){
   if(confirm("Tem certeza que deseja cancelar e liberar esse horário?")){
     if(db){
-      db.ref('agendamentos/' + dateKey + '/' + timeKey).remove().then(function(){
-        alert("Agendamento ou bloqueio removido!");
-        if(isClient) start(); else loadAdminPanel();
+      db.ref('agendamentos/' + dateKey + '/' + timeKey).once('value').then(function(snap){
+        var item = snap.val();
+        if(!item){
+          db.ref('agendamentos/' + dateKey + '/' + timeKey).remove();
+          if(isClient) start(); else loadAdminPanel();
+          return;
+        }
+
+        db.ref('agendamentos/' + dateKey).once('value').then(function(daySnap){
+          var dayData = daySnap.val() || {};
+          var removes = {};
+          for(var tk in dayData){
+            if(dayData[tk].nome === item.nome && dayData[tk].hora === item.hora){
+              removes[tk] = null;
+            }
+          }
+          if(Object.keys(removes).length === 0) removes[timeKey] = null;
+          db.ref('agendamentos/' + dateKey).update(removes).then(function(){
+            alert("Agendamento ou bloqueio removido!");
+            if(isClient) start(); else loadAdminPanel();
+          });
+        });
       }).catch(function(err){
         alert("Erro ao remover: " + err.message);
       });
@@ -803,7 +832,10 @@ function openEditModal(oldDay, oldTimeKey, itemJsonStr){
     
     var selectTime = document.getElementById("edit-new-time");
     selectTime.innerHTML = generateTimeOptions();
-    selectTime.value = item.hora;
+    selectTime.value = item.hora || "10:00";
+
+    var selectDur = document.getElementById("edit-new-duration");
+    selectDur.value = String(item.duracao || 30);
 
     document.getElementById("modal-edit").style.display = "flex";
   } catch(e){
@@ -821,6 +853,7 @@ function confirmMoveBooking(){
 
   var newDate = document.getElementById("edit-new-date").value;
   var newTime = document.getElementById("edit-new-time").value;
+  var newDur = parseInt(document.getElementById("edit-new-duration").value) || 30;
 
   if(!newDate || !newTime){
     alert("Preencha a data e o horário.");
@@ -828,22 +861,49 @@ function confirmMoveBooking(){
   }
 
   var oldDay = currentEditData.oldDay;
-  var oldTimeKey = currentEditData.oldTimeKey;
-  var item = currentEditData.item;
+  var oldItem = currentEditData.item;
 
   var parts = newDate.split("-");
   var dtObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
   var newLabel = lbl(dtObj);
-  var newTimeKey = newTime.replace(":", "");
 
   if(db){
-    db.ref('agendamentos/' + oldDay + '/' + oldTimeKey).remove().then(function(){
-      item.data = newLabel;
-      item.hora = newTime;
-      db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(item).then(function(){
-        alert("Horário alterado para " + newLabel + " às " + newTime + "!");
-        closeEditModal();
-        loadAdminPanel();
+    db.ref('agendamentos/' + oldDay).once('value').then(function(snapshot){
+      var oldDayData = snapshot.val() || {};
+      var removes = {};
+      for(var tk in oldDayData){
+        if(oldDayData[tk].nome === oldItem.nome && oldDayData[tk].hora === oldItem.hora){
+          removes[tk] = null;
+        }
+      }
+
+      var pRemove = Object.keys(removes).length > 0 ? db.ref('agendamentos/' + oldDay).update(removes) : Promise.resolve();
+
+      pRemove.then(function(){
+        var slotsNeeded = Math.ceil(newDur / 15);
+        var startMin = parseInt(newTime.split(":")[0]) * 60 + parseInt(newTime.split(":")[1]);
+        var updates = {};
+
+        for(var i = 0; i < slotsNeeded; i++) {
+          var currMin = startMin + (i * 15);
+          var tStr = String(Math.floor(currMin/60)).padStart(2,"0") + ":" + String(currMin%60).padStart(2,"0");
+          var timeKey = tStr.replace(":", "");
+          updates[timeKey] = {
+            nome: oldItem.nome, 
+            tel: oldItem.tel, 
+            servico: oldItem.servico, 
+            preco: oldItem.preco, 
+            data: newLabel, 
+            hora: newTime,
+            duracao: newDur
+          };
+        }
+
+        db.ref('agendamentos/' + newDate).update(updates).then(function(){
+          alert("Agendamento alterado com sucesso!");
+          closeEditModal();
+          loadAdminPanel();
+        });
       });
     }).catch(function(err){
       alert("Erro ao alterar: " + err.message);
@@ -873,7 +933,7 @@ function checkAdminPass(){
 
 function generateTimeOptions(){
   var opt = "";
-  for(var m=8*60+30; m<=19*60+30; m+=30){
+  for(var m=8*60+30; m<=19*60+30; m+=15){
     var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
     opt += "<option value='" + t + "'>" + t + "</option>";
   }
@@ -901,7 +961,7 @@ function blockSlotOrDay(){
   if(timeVal === "ALL"){
     if(confirm("Tem certeza que deseja BLOQUEAR O DIA INTEIRO (" + dateLabel + ")?")){
       var updates = {};
-      for(var m=8*60+30; m<=19*60+30; m+=30){
+      for(var m=8*60+30; m<=19*60+30; m+=15){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var tk = t.replace(":", "");
         updates[tk] = {
@@ -911,7 +971,8 @@ function blockSlotOrDay(){
           preco: 0,
           data: dateLabel,
           hora: t,
-          bloqueado: true
+          bloqueado: true,
+          duracao: 15
         };
       }
       db.ref('agendamentos/' + dateVal).update(updates).then(function(){
@@ -928,7 +989,8 @@ function blockSlotOrDay(){
       preco: 0,
       data: dateLabel,
       hora: timeVal,
-      bloqueado: true
+      bloqueado: true,
+      duracao: 15
     }).then(function(){
       alert("Horário " + timeVal + " do dia " + dateLabel + " bloqueado com sucesso!");
       loadAdminPanel();
@@ -973,21 +1035,28 @@ function loadAdminPanel(){
     }
     
     var cardsHtml = "";
+    var seen = {};
+
     for(var day in data){
       for(var time in data[day]){
         var item = data[day][time];
         var isBlocked = item.bloqueado;
+
+        var uniqueKey = day + "_" + (isBlocked ? time : (item.nome + "_" + item.hora));
+        if(seen[uniqueKey]) continue;
+        seen[uniqueKey] = true;
+
         var itemJson = encodeURIComponent(JSON.stringify(item));
 
         cardsHtml += "<div class='admin-card' " + (isBlocked ? "style='border-color:var(--danger); background:rgba(255,71,87,0.08);'" : "") + ">" +
                       "<div class='admin-card-head'><span " + (isBlocked ? "style='color:var(--danger)'" : "") + ">📅 " + item.data + " às " + item.hora + "</span></div>" +
                       "<div class='admin-card-body'>" +
                         "<b>Cliente / Status:</b> " + item.nome + "<br>" +
-                        "<b>Serviço:</b> " + item.servico + "<br>" +
+                        "<b>Serviço:</b> " + item.servico + (item.duracao ? " (" + item.duracao + " min)" : "") + "<br>" +
                         "<b>WhatsApp:</b> " + item.tel +
                       "</div>" +
                       "<div style='display:flex; gap:8px; margin-top:8px;'>" +
-                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"openEditModal('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário</button>" : "") +
+                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"openEditModal('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário/Tempo</button>" : "") +
                         "<button class='btn-card-del' style='margin-top:0;' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear" : "🗑️ Liberar") + "</button>" +
                       "</div>" +
                     "</div>";
