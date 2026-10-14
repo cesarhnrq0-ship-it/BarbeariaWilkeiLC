@@ -321,8 +321,20 @@ button.del-btn {
   border-radius: 10px;
   cursor: pointer;
   font-weight: 700;
-  margin-top: 8px;
   font-size: 13px;
+  flex: 1;
+}
+
+.btn-card-edit {
+  background: var(--card-border);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
 }
 
 #modal-admin {
@@ -398,9 +410,9 @@ var ADMIN_PASS = "123456";
 // [Serviço, Preço, Duração em Minutos]
 var SV = [
   ["Corte masculino", 40, 30], 
-  ["Corte com sobrancelha", 45, 30], 
+  ["Corte com sobrancelha", 45, 40], // 40 min de duração
   ["Barba", 30, 30], 
-  ["Corte e barba", 65, 60], // 60 min = ocupa 2 blocos de 30 min
+  ["Corte e barba", 65, 60], // 60 min
   ["Pezinho", 15, 30]
 ];
 var DOW = ["dom","seg","ter","qua","qui","sex","sáb"], MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -542,11 +554,10 @@ function pickTime(){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var past = (iso(now) === dateKey) && (m <= (now.getHours()*60 + now.getMinutes()));
 
-        // Verificar se todos os blocos necessários para a duração do serviço estão totalmente livres
         var isBooked = false;
         for(var s = 0; s < slotsNeeded; s++){
           var subM = m + (s * 30);
-          if(subM > endMin) { isBooked = true; break; } // Ultrapassa o horário de fecho
+          if(subM > endMin) { isBooked = true; break; }
           var subT = String(Math.floor(subM/60)).padStart(2,"0") + ":" + String(subM%60).padStart(2,"0");
           var subKey = subT.replace(":", "");
           if(booked[subKey]) { isBooked = true; break; }
@@ -758,6 +769,37 @@ function deleteBooking(dateKey, timeKey, isClient){
   }
 }
 
+function moveBooking(oldDay, oldTimeKey, itemJsonStr){
+  try {
+    var item = JSON.parse(decodeURIComponent(itemJsonStr));
+    var newDate = prompt("Nova data para " + item.nome + " (formato AAAA-MM-DD, ex: 2026-10-20):", oldDay);
+    if(!newDate) return;
+    
+    var newTime = prompt("Novo horário para " + item.nome + " (ex: 15:30):", item.hora);
+    if(!newTime) return;
+
+    var newTimeKey = newTime.replace(":", "");
+    var parts = newDate.split("-");
+    var dtObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    var newLabel = lbl(dtObj);
+
+    if(db){
+      db.ref('agendamentos/' + oldDay + '/' + oldTimeKey).remove().then(function(){
+        item.data = newLabel;
+        item.hora = newTime;
+        db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(item).then(function(){
+          alert("Horário alterado com sucesso para " + newLabel + " às " + newTime + "!");
+          loadAdminPanel();
+        });
+      }).catch(function(err){
+        alert("Erro ao mover agendamento: " + err.message);
+      });
+    }
+  } catch(e) {
+    alert("Erro no processo de alteração.");
+  }
+}
+
 function showAdminModal(){
   document.getElementById("admin-pass-input").value = "";
   document.getElementById("admin-err").textContent = "";
@@ -884,6 +926,7 @@ function loadAdminPanel(){
       for(var time in data[day]){
         var item = data[day][time];
         var isBlocked = item.bloqueado;
+        var itemJson = encodeURIComponent(JSON.stringify(item));
 
         cardsHtml += "<div class='admin-card' " + (isBlocked ? "style='border-color:var(--danger); background:rgba(255,71,87,0.08);'" : "") + ">" +
                       "<div class='admin-card-head'><span " + (isBlocked ? "style='color:var(--danger)'" : "") + ">📅 " + item.data + " às " + item.hora + "</span></div>" +
@@ -892,7 +935,10 @@ function loadAdminPanel(){
                         "<b>Serviço:</b> " + item.servico + "<br>" +
                         "<b>WhatsApp:</b> " + item.tel +
                       "</div>" +
-                      "<button class='btn-card-del' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear Horário" : "🗑️ Liberar Horário") + "</button>" +
+                      "<div style='display:flex; gap:8px; margin-top:8px;'>" +
+                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"moveBooking('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário</button>" : "") +
+                        "<button class='btn-card-del' style='margin-top:0;' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear" : "🗑️ Liberar") + "</button>" +
+                      "</div>" +
                     "</div>";
       }
     }
