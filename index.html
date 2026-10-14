@@ -199,6 +199,8 @@ input, select {
   font-size: 15px;
   outline: none;
   transition: border-color 0.2s;
+  width: 100%;
+  color-scheme: dark;
 }
 
 input:focus, select:focus {
@@ -217,6 +219,7 @@ input:focus, select:focus {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2);
+  width: 100%;
 }
 
 a.wa, a.cal, button.cal, button.del-btn {
@@ -812,9 +815,9 @@ function loadAdminPanel(){
                "<div class='admin-card-head'><span>🚫 Bloquear Horário / Folga</span></div>" +
                "<div class='admin-card-body'>" +
                  "<label style='font-weight:600; font-size:13px;'>Data para bloquear:</label>" +
-                 "<input type='date' id='block-date' value='" + todayIso + "' style='margin-bottom:8px; width:100%;'>" +
+                 "<input type='date' id='block-date' value='" + todayIso + "' style='margin-bottom:8px;'>" +
                  "<label style='font-weight:600; font-size:13px;'>Horário:</label>" +
-                 "<select id='block-time' style='width:100%; margin-bottom:12px;'>" +
+                 "<select id='block-time' style='margin-bottom:12px;'>" +
                    "<option value='ALL'>⚠️ Bloquear O DIA INTEIRO</option>" +
                    generateTimeOptions() +
                  "</select>" +
