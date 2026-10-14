@@ -395,7 +395,14 @@ try {
 
 var SALON = "5511989448738";
 var ADMIN_PASS = "123456";
-var SV = [["Corte masculino", 40, 40], ["Corte com sobrancelha", 45, 45], ["Barba", 30, 30], ["Corte e barba", 65, 70], ["Pezinho", 15, 15]];
+// [Serviço, Preço, Duração em Minutos]
+var SV = [
+  ["Corte masculino", 40, 30], 
+  ["Corte com sobrancelha", 45, 30], 
+  ["Barba", 30, 30], 
+  ["Corte e barba", 65, 60], // 60 min = ocupa 2 blocos de 30 min
+  ["Pezinho", 15, 30]
+];
 var DOW = ["dom","seg","ter","qua","qui","sex","sáb"], MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 var S = {}; 
 var log = document.getElementById("log"), ctl = document.getElementById("ctl");
@@ -418,7 +425,7 @@ function lbl(d){
   return DOW[d.getDay()] + ", " + d.getDate() + " " + MES[d.getMonth()];
 }
 
-function chips(items,cb,showBack){
+function chips(items,cb,showBackType){
   ctl.innerHTML="";
   var w=document.createElement("div");w.className="chips";
   items.forEach(function(it){
@@ -434,7 +441,13 @@ function chips(items,cb,showBack){
   });
   ctl.appendChild(w);
 
-  if(showBack) {
+  if(showBackType === "day") {
+    var btnBack = document.createElement("button");
+    btnBack.className = "btn-back";
+    btnBack.textContent = "↩️ Escolher outro serviço";
+    btnBack.onclick = function() { selectService(); };
+    ctl.appendChild(btnBack);
+  } else if(showBackType === "time") {
     var btnBack = document.createElement("button");
     btnBack.className = "btn-back";
     btnBack.textContent = "↩️ Escolher outro dia";
@@ -491,7 +504,7 @@ function pickDay(){
   chips(days.map(function(d){return{t:lbl(d),d:d}}),function(it){
     S.date = new Date(it.d.getTime());
     pickTime();
-  });
+  }, "day");
 }
 
 function pickTime(){
@@ -522,13 +535,22 @@ function pickTime(){
 
       var now = new Date(); 
       var items = [];
+      var duration = S.svc ? S.svc[2] : 30;
+      var slotsNeeded = Math.ceil(duration / 30);
 
       for(var m = startMin; m <= endMin; m += 30){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
-        var timeKey = t.replace(":", "");
-        
         var past = (iso(now) === dateKey) && (m <= (now.getHours()*60 + now.getMinutes()));
-        var isBooked = !!booked[timeKey];
+
+        // Verificar se todos os blocos necessários para a duração do serviço estão totalmente livres
+        var isBooked = false;
+        for(var s = 0; s < slotsNeeded; s++){
+          var subM = m + (s * 30);
+          if(subM > endMin) { isBooked = true; break; } // Ultrapassa o horário de fecho
+          var subT = String(Math.floor(subM/60)).padStart(2,"0") + ":" + String(subM%60).padStart(2,"0");
+          var subKey = subT.replace(":", "");
+          if(booked[subKey]) { isBooked = true; break; }
+        }
 
         items.push({
           t: isBooked ? t + " (Ocupado)" : t,
@@ -541,7 +563,7 @@ function pickTime(){
       chips(items, function(it){
         S.time = it.rawTime;
         getUserData();
-      }, true);
+      }, "time");
     }).catch(function(err){
       say("Erro ao consultar horários no banco. Tente recarregar.");
     });
@@ -573,13 +595,27 @@ function confirm2(){
 
 function saveAndFinish(){
   var dateKey = iso(S.date);
-  var timeKey = S.time.replace(":","");
-  
+  var duration = S.svc ? S.svc[2] : 30;
+  var slotsNeeded = Math.ceil(duration / 30);
+  var startMin = parseInt(S.time.split(":")[0]) * 60 + parseInt(S.time.split(":")[1]);
+
   if(db){
     try {
-      db.ref('agendamentos/' + dateKey + '/' + timeKey).set({
-        nome: S.nome, tel: S.tel, servico: S.svc[0], preco: S.svc[1], data: lbl(S.date), hora: S.time
-      });
+      var updates = {};
+      for(var i = 0; i < slotsNeeded; i++) {
+        var currMin = startMin + (i * 30);
+        var tStr = String(Math.floor(currMin/60)).padStart(2,"0") + ":" + String(currMin%60).padStart(2,"0");
+        var timeKey = tStr.replace(":", "");
+        updates[timeKey] = {
+          nome: S.nome, 
+          tel: S.tel, 
+          servico: S.svc[0], 
+          preco: S.svc[1], 
+          data: lbl(S.date), 
+          hora: S.time
+        };
+      }
+      db.ref('agendamentos/' + dateKey).update(updates);
     } catch(e){}
   }
   
@@ -654,7 +690,7 @@ function saveAndFinish(){
   var btnCancel = document.createElement("button");
   btnCancel.className = "del-btn";
   btnCancel.innerHTML = "❌ Cancelar este Agendamento";
-  btnCancel.onclick = function(){ deleteBooking(dateKey, timeKey, true); };
+  btnCancel.onclick = function(){ deleteBooking(dateKey, S.time.replace(":",""), true); };
   ctl.appendChild(btnCancel);
 }
 
