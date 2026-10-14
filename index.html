@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -481,9 +480,10 @@ function pickDay(){
   var days=[], base = new Date();
   base.setHours(0,0,0,0);
 
+  /* Pula Domingo (0) e Segunda (1) */
   for(var k=0; k<45 && days.length<30; k++){
     var d = new Date(base.getTime() + k*86400000);
-    if(d.getDay() !== 0) days.push(d);
+    if(d.getDay() !== 0 && d.getDay() !== 1) days.push(d);
   }
   chips(days.map(function(d){return{t:lbl(d),d:d}}),function(it){
     S.date = new Date(it.d.getTime());
@@ -502,11 +502,26 @@ function pickTime(){
 
     fetchBookings.then(function(snapshot){
       var booked = snapshot.val() || {};
-      var end = d.getDay() === 6 ? 15 : 18;
+      var dayNum = d.getDay();
+      var startMin = 9 * 60;
+      var endMin = 18 * 60;
+
+      // Define horário inicial e final conforme o dia da semana
+      if (dayNum === 2 || dayNum === 3) { // Terça e Quarta (10:00 às 19:30)
+        startMin = 10 * 60;
+        endMin = 19 * 60 + 30;
+      } else if (dayNum === 4 || dayNum === 5) { // Quinta e Sexta (09:00 às 19:30)
+        startMin = 9 * 60;
+        endMin = 19 * 60 + 30;
+      } else if (dayNum === 6) { // Sábado (08:30 às 16:00)
+        startMin = 8 * 60 + 30;
+        endMin = 16 * 60;
+      }
+
       var now = new Date(); 
       var items = [];
 
-      for(var m=9*60; m<end*60; m+=30){
+      for(var m = startMin; m <= endMin; m += 30){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var timeKey = t.replace(":", "");
         
@@ -764,4 +779,3 @@ start();
 </script>
 </body>
 </html>
-```
