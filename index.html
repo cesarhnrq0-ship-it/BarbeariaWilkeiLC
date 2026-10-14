@@ -200,7 +200,9 @@ input, select {
   outline: none;
   transition: border-color 0.2s;
   width: 100%;
+  max-width: 100%;
   color-scheme: dark;
+  -webkit-appearance: none;
 }
 
 input:focus, select:focus {
@@ -291,6 +293,8 @@ button.del-btn {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .admin-card-head {
@@ -307,6 +311,7 @@ button.del-btn {
   font-size: 14px;
   color: var(--mute);
   line-height: 1.6;
+  width: 100%;
 }
 
 .admin-card-body b {
@@ -337,7 +342,7 @@ button.del-btn {
   flex: 1;
 }
 
-#modal-admin {
+#modal-admin, #modal-edit {
   display: none;
   position: fixed;
   top: 0;
@@ -359,7 +364,7 @@ button.del-btn {
   width: 90%;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   border: 1px solid var(--card-border);
 }
 </style>
@@ -383,6 +388,7 @@ button.del-btn {
 <div id="log" aria-live="polite"></div>
 <div id="dock"><div id="ctl"></div></div>
 
+<!-- Modal Admin Pass -->
 <div id="modal-admin">
   <div class="modal-content">
     <b style="font-size:18px; text-transform:uppercase;">Acesso do Barbeiro</b>
@@ -390,6 +396,23 @@ button.del-btn {
     <p class="err" id="admin-err"></p>
     <button class="send" onclick="checkAdminPass()">Entrar</button>
     <button class="admin-btn" onclick="closeAdminModal()">Cancelar</button>
+  </div>
+</div>
+
+<!-- Modal Editar Agendamento -->
+<div id="modal-edit">
+  <div class="modal-content">
+    <b style="font-size:16px; text-transform:uppercase; color:var(--accent);">✏️ Mudar Horário</b>
+    <p id="edit-info" style="font-size:13px; color:var(--mute); margin:0;"></p>
+    
+    <label style="font-size:12px; font-weight:600;">Nova Data:</label>
+    <input type="date" id="edit-new-date">
+
+    <label style="font-size:12px; font-weight:600;">Novo Horário:</label>
+    <select id="edit-new-time"></select>
+
+    <button class="send" onclick="confirmMoveBooking()">💾 Salvar Alterações</button>
+    <button class="admin-btn" onclick="closeEditModal()">Cancelar</button>
   </div>
 </div>
 
@@ -407,12 +430,14 @@ try {
 
 var SALON = "5511989448738";
 var ADMIN_PASS = "123456";
+var currentEditData = null;
+
 // [Serviço, Preço, Duração em Minutos]
 var SV = [
   ["Corte masculino", 40, 30], 
-  ["Corte com sobrancelha", 45, 40], // 40 min de duração
+  ["Corte com sobrancelha", 45, 40], 
   ["Barba", 30, 30], 
-  ["Corte e barba", 65, 60], // 60 min
+  ["Corte e barba", 65, 60], 
   ["Pezinho", 15, 30]
 ];
 var DOW = ["dom","seg","ter","qua","qui","sex","sáb"], MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -508,7 +533,6 @@ function pickDay(){
   var days=[], base = new Date();
   base.setHours(0,0,0,0);
 
-  /* Pula Domingo (0) e Segunda (1) */
   for(var k=0; k<45 && days.length<30; k++){
     var d = new Date(base.getTime() + k*86400000);
     if(d.getDay() !== 0 && d.getDay() !== 1) days.push(d);
@@ -534,13 +558,13 @@ function pickTime(){
       var startMin = 9 * 60;
       var endMin = 18 * 60;
 
-      if (dayNum === 2 || dayNum === 3) { // Terça e Quarta (10:00 às 19:30)
+      if (dayNum === 2 || dayNum === 3) {
         startMin = 10 * 60;
         endMin = 19 * 60 + 30;
-      } else if (dayNum === 4 || dayNum === 5) { // Quinta e Sexta (09:00 às 19:30)
+      } else if (dayNum === 4 || dayNum === 5) {
         startMin = 9 * 60;
         endMin = 19 * 60 + 30;
-      } else if (dayNum === 6) { // Sábado (08:30 às 16:00)
+      } else if (dayNum === 6) {
         startMin = 8 * 60 + 30;
         endMin = 16 * 60;
       }
@@ -769,34 +793,61 @@ function deleteBooking(dateKey, timeKey, isClient){
   }
 }
 
-function moveBooking(oldDay, oldTimeKey, itemJsonStr){
+function openEditModal(oldDay, oldTimeKey, itemJsonStr){
   try {
     var item = JSON.parse(decodeURIComponent(itemJsonStr));
-    var newDate = prompt("Nova data para " + item.nome + " (formato AAAA-MM-DD, ex: 2026-10-20):", oldDay);
-    if(!newDate) return;
+    currentEditData = { oldDay: oldDay, oldTimeKey: oldTimeKey, item: item };
     
-    var newTime = prompt("Novo horário para " + item.nome + " (ex: 15:30):", item.hora);
-    if(!newTime) return;
+    document.getElementById("edit-info").textContent = "Cliente: " + item.nome + " (" + item.servico + ")";
+    document.getElementById("edit-new-date").value = oldDay;
+    
+    var selectTime = document.getElementById("edit-new-time");
+    selectTime.innerHTML = generateTimeOptions();
+    selectTime.value = item.hora;
 
-    var newTimeKey = newTime.replace(":", "");
-    var parts = newDate.split("-");
-    var dtObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
-    var newLabel = lbl(dtObj);
+    document.getElementById("modal-edit").style.display = "flex";
+  } catch(e){
+    alert("Erro ao abrir edição.");
+  }
+}
 
-    if(db){
-      db.ref('agendamentos/' + oldDay + '/' + oldTimeKey).remove().then(function(){
-        item.data = newLabel;
-        item.hora = newTime;
-        db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(item).then(function(){
-          alert("Horário alterado com sucesso para " + newLabel + " às " + newTime + "!");
-          loadAdminPanel();
-        });
-      }).catch(function(err){
-        alert("Erro ao mover agendamento: " + err.message);
+function closeEditModal(){
+  document.getElementById("modal-edit").style.display = "none";
+  currentEditData = null;
+}
+
+function confirmMoveBooking(){
+  if(!currentEditData) return;
+
+  var newDate = document.getElementById("edit-new-date").value;
+  var newTime = document.getElementById("edit-new-time").value;
+
+  if(!newDate || !newTime){
+    alert("Preencha a data e o horário.");
+    return;
+  }
+
+  var oldDay = currentEditData.oldDay;
+  var oldTimeKey = currentEditData.oldTimeKey;
+  var item = currentEditData.item;
+
+  var parts = newDate.split("-");
+  var dtObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  var newLabel = lbl(dtObj);
+  var newTimeKey = newTime.replace(":", "");
+
+  if(db){
+    db.ref('agendamentos/' + oldDay + '/' + oldTimeKey).remove().then(function(){
+      item.data = newLabel;
+      item.hora = newTime;
+      db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(item).then(function(){
+        alert("Horário alterado para " + newLabel + " às " + newTime + "!");
+        closeEditModal();
+        loadAdminPanel();
       });
-    }
-  } catch(e) {
-    alert("Erro no processo de alteração.");
+    }).catch(function(err){
+      alert("Erro ao alterar: " + err.message);
+    });
   }
 }
 
@@ -936,7 +987,7 @@ function loadAdminPanel(){
                         "<b>WhatsApp:</b> " + item.tel +
                       "</div>" +
                       "<div style='display:flex; gap:8px; margin-top:8px;'>" +
-                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"moveBooking('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário</button>" : "") +
+                        (!isBlocked ? "<button class='btn-card-edit' onclick=\"openEditModal('"+day+"','"+time+"','"+itemJson+"')\">✏️ Mudar Horário</button>" : "") +
                         "<button class='btn-card-del' style='margin-top:0;' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear" : "🗑️ Liberar") + "</button>" +
                       "</div>" +
                     "</div>";
