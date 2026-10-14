@@ -137,7 +137,7 @@ header div.sub {
   gap: 10px;
 }
 
-button, input {
+button, input, select {
   font-family: var(--font-main);
 }
 
@@ -190,7 +190,7 @@ form {
   gap: 10px;
 }
 
-input {
+input, select {
   color: var(--ink);
   background: var(--card);
   border: 1px solid var(--card-border);
@@ -201,7 +201,7 @@ input {
   transition: border-color 0.2s;
 }
 
-input:focus {
+input:focus, select:focus {
   border-color: var(--accent);
 }
 
@@ -506,7 +506,6 @@ function pickTime(){
       var startMin = 9 * 60;
       var endMin = 18 * 60;
 
-      // Define horário inicial e final conforme o dia da semana
       if (dayNum === 2 || dayNum === 3) { // Terça e Quarta (10:00 às 19:30)
         startMin = 10 * 60;
         endMin = 19 * 60 + 30;
@@ -709,10 +708,10 @@ function deleteBooking(dateKey, timeKey, isClient){
   if(confirm("Tem certeza que deseja cancelar e liberar esse horário?")){
     if(db){
       db.ref('agendamentos/' + dateKey + '/' + timeKey).remove().then(function(){
-        alert("Agendamento cancelado!");
+        alert("Agendamento ou bloqueio removido!");
         if(isClient) start(); else loadAdminPanel();
       }).catch(function(err){
-        alert("Erro ao cancelar: " + err.message);
+        alert("Erro ao remover: " + err.message);
       });
     } else {
       alert("Erro de conexão com o banco de dados.");
@@ -740,38 +739,125 @@ function checkAdminPass(){
   }
 }
 
+function generateTimeOptions(){
+  var opt = "";
+  for(var m=8*60+30; m<=19*60+30; m+=30){
+    var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
+    opt += "<option value='" + t + "'>" + t + "</option>";
+  }
+  return opt;
+}
+
+function blockSlotOrDay(){
+  var dateVal = document.getElementById('block-date').value;
+  var timeVal = document.getElementById('block-time').value;
+
+  if(!dateVal){
+    alert("Selecione uma data para bloquear.");
+    return;
+  }
+
+  if(!db){
+    alert("Banco de dados indisponível.");
+    return;
+  }
+
+  var parts = dateVal.split("-");
+  var dtObj = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  var dateLabel = lbl(dtObj);
+
+  if(timeVal === "ALL"){
+    if(confirm("Tem certeza que deseja BLOQUEAR O DIA INTEIRO (" + dateLabel + ")?")){
+      var updates = {};
+      for(var m=8*60+30; m<=19*60+30; m+=30){
+        var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
+        var tk = t.replace(":", "");
+        updates[tk] = {
+          nome: "🚫 DIA BLOQUEADO",
+          tel: "-",
+          servico: "Folga / Fechado",
+          preco: 0,
+          data: dateLabel,
+          hora: t,
+          bloqueado: true
+        };
+      }
+      db.ref('agendamentos/' + dateVal).update(updates).then(function(){
+        alert("Dia " + dateLabel + " bloqueado com sucesso!");
+        loadAdminPanel();
+      });
+    }
+  } else {
+    var tk = timeVal.replace(":", "");
+    db.ref('agendamentos/' + dateVal + '/' + tk).set({
+      nome: "🚫 HORÁRIO BLOQUEADO",
+      tel: "-",
+      servico: "Indisponível",
+      preco: 0,
+      data: dateLabel,
+      hora: timeVal,
+      bloqueado: true
+    }).then(function(){
+      alert("Horário " + timeVal + " do dia " + dateLabel + " bloqueado com sucesso!");
+      loadAdminPanel();
+    });
+  }
+}
+
 function loadAdminPanel(){
-  log.innerHTML = "<h3>Painel do Barbeiro</h3><p>Buscando agendamentos...</p>";
+  var todayIso = iso(new Date());
+
+  var html = "<h3>Painel do Barbeiro</h3>" +
+             "<div class='admin-card' style='border-color:var(--accent);'>" +
+               "<div class='admin-card-head'><span>🚫 Bloquear Horário / Folga</span></div>" +
+               "<div class='admin-card-body'>" +
+                 "<label style='font-weight:600; font-size:13px;'>Data para bloquear:</label>" +
+                 "<input type='date' id='block-date' value='" + todayIso + "' style='margin-bottom:8px; width:100%;'>" +
+                 "<label style='font-weight:600; font-size:13px;'>Horário:</label>" +
+                 "<select id='block-time' style='width:100%; margin-bottom:12px;'>" +
+                   "<option value='ALL'>⚠️ Bloquear O DIA INTEIRO</option>" +
+                   generateTimeOptions() +
+                 "</select>" +
+                 "<button class='send' onclick='blockSlotOrDay()'>🔒 CONFIRMAR BLOQUEIO</button>" +
+               "</div>" +
+             "</div>" +
+             "<h3>Agendamentos Registrados</h3>" +
+             "<p id='admin-status'>Buscando agendamentos...</p>";
+
+  log.innerHTML = html;
   ctl.innerHTML = "<button class='send' onclick='start()'>Voltar ao Início</button>";
 
   if(!db){
-    log.innerHTML = "<h3>Painel do Barbeiro</h3><p>Banco de dados offline.</p>";
+    document.getElementById('admin-status').outerHTML = "<p>Banco de dados offline.</p>";
     return;
   }
 
   db.ref('agendamentos').once('value').then(function(snapshot){
     var data = snapshot.val();
+    var statusElem = document.getElementById('admin-status');
     if(!data){
-      log.innerHTML = "<h3>Painel do Barbeiro</h3><p>Nenhum agendamento ativo.</p>";
+      statusElem.outerHTML = "<p>Nenhum agendamento ativo.</p>";
       return;
     }
     
-    var html = "<h3>Agendamentos Registrados</h3>";
+    var cardsHtml = "";
     for(var day in data){
       for(var time in data[day]){
         var item = data[day][time];
-        html += "<div class='admin-card'>" +
-                  "<div class='admin-card-head'><span>📅 " + item.data + " às " + item.hora + "</span></div>" +
-                  "<div class='admin-card-body'>" +
-                    "<b>Cliente:</b> " + item.nome + "<br>" +
-                    "<b>Serviço:</b> " + item.servico + "<br>" +
-                    "<b>WhatsApp:</b> " + item.tel +
-                  "</div>" +
-                  "<button class='btn-card-del' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">🗑️ Liberar Horário</button>" +
-                "</div>";
+        var isBlocked = item.bloqueado;
+
+        cardsHtml += "<div class='admin-card' " + (isBlocked ? "style='border-color:var(--danger); background:rgba(255,71,87,0.08);'" : "") + ">" +
+                      "<div class='admin-card-head'><span " + (isBlocked ? "style='color:var(--danger)'" : "") + ">📅 " + item.data + " às " + item.hora + "</span></div>" +
+                      "<div class='admin-card-body'>" +
+                        "<b>Cliente / Status:</b> " + item.nome + "<br>" +
+                        "<b>Serviço:</b> " + item.servico + "<br>" +
+                        "<b>WhatsApp:</b> " + item.tel +
+                      "</div>" +
+                      "<button class='btn-card-del' onclick=\"deleteBooking('"+day+"','"+time+"',false)\">" + (isBlocked ? "🔓 Desbloquear Horário" : "🗑️ Liberar Horário") + "</button>" +
+                    "</div>";
       }
     }
-    log.innerHTML = html;
+    statusElem.outerHTML = cardsHtml || "<p>Nenhum agendamento ativo.</p>";
   });
 }
 
