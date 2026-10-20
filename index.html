@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Barbearia Wilkei LC — AMBIENTE DE TESTE</title>
+<title>Barbearia Wilkei LC — Agendamento</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -38,18 +38,6 @@ body {
   flex-direction: column;
   height: 100vh;
   background-image: radial-gradient(circle at 50% 0%, #1f1d2b 0%, var(--bg) 70%);
-}
-
-/* Banner de Teste */
-.test-banner {
-  background: var(--accent);
-  color: #000;
-  font-size: 12px;
-  font-weight: 800;
-  text-align: center;
-  padding: 6px 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 header {
@@ -453,14 +441,12 @@ button.del-btn {
 </head>
 <body>
 
-<div class="test-banner">🧪 MODO TESTE / AMBIENTE DE DEMONSTRAÇÃO (DADOS SEPARADOS)</div>
-
 <header>
   <div class="brand">
     <span class="brand-icon">💈</span>
     <div>
       <b>Barbearia Wilkei LC</b>
-      <div class="sub">Agendamento Online (Teste)</div>
+      <div class="sub">Agendamento Online</div>
     </div>
   </div>
   <button class="admin-btn" onclick="showAdminModal()">Admin</button>
@@ -512,8 +498,6 @@ button.del-btn {
 
 <script>
 var db = null;
-var DB_PATH = "agendamentos_teste"; // <--- SEPARADO DA AGENDA REAL
-
 try {
   const firebaseConfig = {
     databaseURL: "https://barbearia-63f58-default-rtdb.firebaseio.com/"
@@ -628,7 +612,7 @@ function askMulti(fields,cb){
 function start(){
   S={};
   log.innerHTML = "";
-  say("Salve! Seja bem-vindo à Barbearia Wilkei LC! 💈 (Modo Teste)\nComo posso te ajudar hoje?");
+  say("Salve! Seja bem-vindo à Barbearia Wilkei LC! 💈\nComo posso te ajudar hoje?");
   chips([
     {t:"✂️ Mandar aquele corte (Agendar)", act:"new"},
     {t:"❌ Cancelar meu agendamento", act:"cancel"}
@@ -663,9 +647,9 @@ function pickTime(){
     var d = S.date || new Date();
     var dateKey = iso(d);
     
-    ctl.innerHTML = "<p style='color:var(--mute); font-size:14px;'>🔍 Consultando horários livres (Teste)...</p>";
+    ctl.innerHTML = "<p style='color:var(--mute); font-size:14px;'>🔍 Consultando horários livres...</p>";
 
-    var fetchBookings = db ? db.ref(DB_PATH + '/' + dateKey).once('value') : Promise.resolve({ val: function(){ return null; } });
+    var fetchBookings = db ? db.ref('agendamentos/' + dateKey).once('value') : Promise.resolve({ val: function(){ return null; } });
 
     fetchBookings.then(function(snapshot){
       var booked = snapshot.val() || {};
@@ -806,7 +790,7 @@ function saveAndFinish(){
 
   if(db){
     try {
-      db.ref(DB_PATH + '/' + dateKey + '/' + timeKey).set({
+      db.ref('agendamentos/' + dateKey + '/' + timeKey).set({
         nome: S.nome, 
         tel: S.tel, 
         servico: S.svc[0], 
@@ -820,10 +804,10 @@ function saveAndFinish(){
     } catch(e){}
   }
   
-  say("Tudo pronto! Seu horário tá garantido na régua 📐 (Modo Teste)");
+  say("Tudo pronto! Seu horário tá garantido na régua 📐");
   
   var statusPixMsg = (S.pagamento === "PIX") ? "PIX REALIZADO (Segue o comprovante em anexo abaixo)" : "A pagar na loja";
-  var m = "[AGENDAMENTO DE TESTE]\n\n" +
+  var m = "Olá! Fiz um agendamento pelo site:\n\n" +
           "• Nome: " + S.nome + "\n" +
           "• Serviço: " + S.svc[0] + "\n" +
           "• Data: " + lbl(S.date) + " às " + S.time + "\n" +
@@ -837,9 +821,9 @@ function saveAndFinish(){
   var fmt = function(d){ return d.toISOString().replace(/-|:|\.\d+/g, ""); };
 
   var gCalUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-                "&text=" + encodeURIComponent("[TESTE] " + S.svc[0] + " - Barbearia Wilkei LC") +
+                "&text=" + encodeURIComponent(S.svc[0] + " - Barbearia Wilkei LC") +
                 "&dates=" + fmt(dtStart) + "/" + fmt(dtEnd) +
-                "&details=" + encodeURIComponent("Agendamento de teste") +
+                "&details=" + encodeURIComponent("Agendamento na Barbearia Wilkei LC") +
                 "&location=" + encodeURIComponent("Barbearia Wilkei LC");
 
   ctl.innerHTML="";
@@ -859,8 +843,8 @@ function saveAndFinish(){
       "VERSION:2.0\n" +
       "PRODID:-//Barbearia Wilkei LC//PT\n" +
       "BEGIN:VEVENT\n" +
-      "SUMMARY:[TESTE] " + S.svc[0] + " - Barbearia Wilkei LC\n" +
-      "DESCRIPTION:Agendamento de teste na Barbearia Wilkei LC.\n" +
+      "SUMMARY:" + S.svc[0] + " - Barbearia Wilkei LC\n" +
+      "DESCRIPTION:Seu agendamento na Barbearia Wilkei LC está confirmado.\n" +
       "LOCATION:Barbearia Wilkei LC\n" +
       "DTSTART:" + fmt(dtStart) + "\n" +
       "DTEND:" + fmt(dtEnd) + "\n" +
@@ -875,7 +859,7 @@ function saveAndFinish(){
     var blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
     var link = document.createElement('a');
     link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', 'agendamento_teste.ics');
+    link.setAttribute('download', 'agendamento.ics');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -895,6 +879,7 @@ function saveAndFinish(){
   btnCancel.onclick = function(){ deleteBooking(dateKey, S.time.replace(":",""), true); };
   ctl.appendChild(btnCancel);
 
+  // Se o pagamento for via PIX, redireciona para o WhatsApp após salvar
   if(S.pagamento === "PIX"){
     window.open("https://wa.me/" + SALON + "?text=" + encodeURIComponent(m), "_blank");
   }
@@ -911,7 +896,7 @@ function cancelByClient(){
       return;
     }
 
-    db.ref(DB_PATH).once('value').then(function(snapshot){
+    db.ref('agendamentos').once('value').then(function(snapshot){
       var data = snapshot.val();
       var found = [];
       var seenBooking = {};
@@ -932,13 +917,13 @@ function cancelByClient(){
       }
 
       if(found.length === 0){
-        say("Não encontrei nenhum agendamento de teste para esse número.");
+        say("Não encontrei nenhum agendamento para esse número.");
         chips([{t:"Tentar outro número", act:"retry"}, {t:"Voltar ao início", act:"home"}], function(it){
           if(it.act === "retry") cancelByClient();
           else start();
         });
       } else {
-        say("Encontrei esses agendamentos de teste no seu número:");
+        say("Encontrei esses agendamentos no seu número:");
         ctl.innerHTML = "";
         found.forEach(function(item){
           var btn = document.createElement("button");
@@ -955,12 +940,12 @@ function cancelByClient(){
 }
 
 function deleteBooking(dateKey, timeKey, isClient){
-  if(confirm("[MODO TESTE] Tem certeza que deseja remover este item?")){
+  if(confirm("Tem certeza que deseja remover este item e liberar a agenda?")){
     if(db){
-      db.ref(DB_PATH + '/' + dateKey + '/' + timeKey).once('value').then(function(snap){
+      db.ref('agendamentos/' + dateKey + '/' + timeKey).once('value').then(function(snap){
         var item = snap.val();
         
-        db.ref(DB_PATH + '/' + dateKey).once('value').then(function(daySnap){
+        db.ref('agendamentos/' + dateKey).once('value').then(function(daySnap){
           var dayData = daySnap.val() || {};
           var removes = {};
 
@@ -974,8 +959,8 @@ function deleteBooking(dateKey, timeKey, isClient){
           }
           removes[timeKey] = null;
 
-          db.ref(DB_PATH + '/' + dateKey).update(removes).then(function(){
-            alert("Removido no ambiente de teste!");
+          db.ref('agendamentos/' + dateKey).update(removes).then(function(){
+            alert("Removido e horário/dia liberado com sucesso!");
             if(isClient) start(); else loadAdminPanel();
           });
         });
@@ -988,7 +973,7 @@ function deleteBooking(dateKey, timeKey, isClient){
 
 function togglePagoStatus(dateKey, timeKey, currentStatus){
   if(db){
-    db.ref(DB_PATH + '/' + dateKey + '/' + timeKey + '/pago').set(!currentStatus).then(function(){
+    db.ref('agendamentos/' + dateKey + '/' + timeKey + '/pago').set(!currentStatus).then(function(){
       loadAdminPanel();
     });
   }
@@ -1042,7 +1027,7 @@ function confirmMoveBooking(){
   var newTimeKey = newTime.replace(":", "");
 
   if(db){
-    db.ref(DB_PATH + '/' + oldDay).once('value').then(function(snapshot){
+    db.ref('agendamentos/' + oldDay).once('value').then(function(snapshot){
       var oldDayData = snapshot.val() || {};
       var removes = {};
 
@@ -1053,7 +1038,7 @@ function confirmMoveBooking(){
       }
       removes[oldTimeKey] = null;
 
-      db.ref(DB_PATH + '/' + oldDay).update(removes).then(function(){
+      db.ref('agendamentos/' + oldDay).update(removes).then(function(){
         var updateData = {
           nome: oldItem.nome, 
           tel: oldItem.tel, 
@@ -1066,8 +1051,8 @@ function confirmMoveBooking(){
           pago: oldItem.pago || false
         };
 
-        db.ref(DB_PATH + '/' + newDate + '/' + newTimeKey).set(updateData).then(function(){
-          alert("Agendamento alterado no teste para " + newLabel + " às " + newTime + "!");
+        db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(updateData).then(function(){
+          alert("Agendamento alterado para " + newLabel + " às " + newTime + " (" + newDur + " min)!");
           closeEditModal();
           loadAdminPanel();
         });
@@ -1126,7 +1111,7 @@ function blockSlotOrDay(){
   var dateLabel = lbl(dtObj);
 
   if(timeVal === "ALL"){
-    if(confirm("[TESTE] Bloquear O DIA INTEIRO (" + dateLabel + ")?")){
+    if(confirm("Tem certeza que deseja BLOQUEAR O DIA INTEIRO (" + dateLabel + ")?")){
       var updates = {};
       for(var m=8*60+30; m<=19*60+30; m+=30){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
@@ -1142,14 +1127,14 @@ function blockSlotOrDay(){
           duracao: 30
         };
       }
-      db.ref(DB_PATH + '/' + dateVal).update(updates).then(function(){
-        alert("Dia " + dateLabel + " bloqueado no modo teste!");
+      db.ref('agendamentos/' + dateVal).update(updates).then(function(){
+        alert("Dia " + dateLabel + " bloqueado com sucesso!");
         switchAdminTab('block');
       });
     }
   } else {
     var tk = timeVal.replace(":", "");
-    db.ref(DB_PATH + '/' + dateVal + '/' + tk).set({
+    db.ref('agendamentos/' + dateVal + '/' + tk).set({
       nome: "🚫 HORÁRIO BLOQUEADO",
       tel: "-",
       servico: "Indisponível",
@@ -1159,7 +1144,7 @@ function blockSlotOrDay(){
       bloqueado: true,
       duracao: 30
     }).then(function(){
-      alert("Horário " + timeVal + " do dia " + dateLabel + " bloqueado no modo teste!");
+      alert("Horário " + timeVal + " do dia " + dateLabel + " bloqueado com sucesso!");
       switchAdminTab('block');
     });
   }
@@ -1174,7 +1159,7 @@ function loadAdminPanel(){
   var todayIso = iso(new Date());
 
   var html = "<div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;'>" +
-               "<h3 style='margin:0;'>Painel do Barbeiro (Modo Teste)</h3>" +
+               "<h3 style='margin:0;'>Painel do Barbeiro</h3>" +
              "</div>" +
              "<div class='admin-tabs'>" +
                "<div class='admin-tab " + (activeAdminTab === 'list' ? 'active' : '') + "' onclick=\"switchAdminTab('list')\">📅 Agendamentos</div>" +
@@ -1185,7 +1170,7 @@ function loadAdminPanel(){
 
   if(activeAdminTab === 'block') {
     var blockFormHtml = "<div class='admin-card' style='border-color:var(--accent);'>" +
-                          "<div class='admin-card-head'><span style='color:var(--accent); font-weight:800;'>🔒 Novo Bloqueio de Horário ou Folga (Teste)</span></div>" +
+                          "<div class='admin-card-head'><span style='color:var(--accent); font-weight:800;'>🔒 Novo Bloqueio de Horário ou Folga</span></div>" +
                           "<div class='admin-card-body'>" +
                             "<label style='font-weight:600; font-size:12px;'>Data para bloquear:</label>" +
                             "<input type='date' id='block-date' value='" + todayIso + "' style='margin-bottom:10px;'>" +
@@ -1194,10 +1179,10 @@ function loadAdminPanel(){
                               "<option value='ALL'>⚠️ Bloquear O DIA INTEIRO (Folga)</option>" +
                               generateAdminTimeOptions() +
                             "</select>" +
-                            "<button class='send' onclick='blockSlotOrDay()'>🔒 CONFIRMAR BLOQUEIO (TESTE)</button>" +
+                            "<button class='send' onclick='blockSlotOrDay()'>🔒 CONFIRMAR BLOQUEIO</button>" +
                           "</div>" +
                         "</div>" +
-                        "<h4 style='margin: 18px 0 10px; color:var(--mute); text-transform:uppercase;'>Bloqueios e Folgas Ativos (Teste)</h4>" +
+                        "<h4 style='margin: 18px 0 10px; color:var(--mute); text-transform:uppercase;'>Bloqueios e Folgas Ativos</h4>" +
                         "<p id='block-status' style='color:var(--mute); font-size:14px;'>🔍 Buscando bloqueios...</p>";
 
     log.innerHTML = html + blockFormHtml;
@@ -1207,11 +1192,11 @@ function loadAdminPanel(){
       return;
     }
 
-    db.ref(DB_PATH).once('value').then(function(snapshot){
+    db.ref('agendamentos').once('value').then(function(snapshot){
       var data = snapshot.val();
       var blockStatusElem = document.getElementById('block-status');
       if(!data){
-        blockStatusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum bloqueio de teste ativo no momento.</p>";
+        blockStatusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum bloqueio ou folga ativa no momento.</p>";
         return;
       }
 
@@ -1244,12 +1229,12 @@ function loadAdminPanel(){
         }
       }
 
-      blockStatusElem.outerHTML = blocksHtml || "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum bloqueio de teste ativo no momento.</p>";
+      blockStatusElem.outerHTML = blocksHtml || "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum bloqueio ou folga ativa no momento.</p>";
     });
     return;
   }
 
-  var listHtml = "<p id='admin-status' style='color:var(--mute); font-size:14px;'>🔍 Buscando agendamentos de teste...</p>";
+  var listHtml = "<p id='admin-status' style='color:var(--mute); font-size:14px;'>🔍 Buscando agendamentos...</p>";
   log.innerHTML = html + listHtml;
 
   if(!db){
@@ -1257,11 +1242,11 @@ function loadAdminPanel(){
     return;
   }
 
-  db.ref(DB_PATH).once('value').then(function(snapshot){
+  db.ref('agendamentos').once('value').then(function(snapshot){
     var data = snapshot.val();
     var statusElem = document.getElementById('admin-status');
     if(!data){
-      statusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento de teste registrado.</p>";
+      statusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento ativo registrado.</p>";
       return;
     }
     
@@ -1302,7 +1287,7 @@ function loadAdminPanel(){
     }
 
     var summaryHtml = "<div class='admin-card' style='background:rgba(255,215,0,0.05); border-color:var(--accent);'>" +
-                        "<div style='font-size:14px; font-weight:800; color:var(--accent); margin-bottom:8px;'>📊 Resumo Financeiro (TESTE - " + currentYearMonth + ")</div>" +
+                        "<div style='font-size:14px; font-weight:800; color:var(--accent); margin-bottom:8px;'>📊 Resumo Financeiro do Mês (" + currentYearMonth + ")</div>" +
                         "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:13px;'>" +
                           "<div><b>Faturamento Bruto:</b><br><span style='font-size:16px; color:#fff; font-weight:800;'>R$ " + totalMes + ",00</span></div>" +
                           "<div><b>Atendimentos:</b><br><span style='font-size:16px; color:#fff; font-weight:800;'>" + qtdAtendimentos + "</span></div>" +
@@ -1314,7 +1299,7 @@ function loadAdminPanel(){
     var sortedDays = Object.keys(datesMap).sort();
 
     if(sortedDays.length === 0){
-      statusElem.outerHTML = summaryHtml + "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento de teste ativo.</p>";
+      statusElem.outerHTML = summaryHtml + "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento de cliente ativo.</p>";
       return;
     }
 
