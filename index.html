@@ -257,11 +257,6 @@ a.cal, button.cal {
   border: 1px solid var(--card-border);
 }
 
-a.cal-google {
-  background: var(--neon-blue);
-  color: #fff;
-}
-
 button.del-btn {
   background: rgba(255, 71, 87, 0.15);
   color: var(--danger);
@@ -805,19 +800,6 @@ function renderFinalButtons(dateKey, timeKey){
           "• Data: " + lbl(S.date) + " às " + S.time + "\n" +
           "• Pagamento: " + statusPixMsg + "\n\n" +
           (isPix ? "📌 Segue em anexo o comprovante de pagamento:" : "");
-  
-  var h = parseInt(S.time.split(":")[0]);
-  var min = parseInt(S.time.split(":")[1]);
-  var dtStart = new Date(S.date.getFullYear(), S.date.getMonth(), S.date.getDate(), h, min);
-  var dtEnd = new Date(dtStart.getTime() + S.svc[2]*60000);
-  
-  var fmt = function(d){ return d.toISOString().replace(/-|:|\.\d+/g, ""); };
-
-  var gCalUrl = "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-                "&text=" + encodeURIComponent(S.svc[0] + " - Barbearia Wilkei LC") +
-                "&dates=" + fmt(dtStart) + "/" + fmt(dtEnd) +
-                "&details=" + encodeURIComponent("Agendamento na Barbearia Wilkei LC") +
-                "&location=" + encodeURIComponent("Barbearia Wilkei LC");
 
   ctl.innerHTML="";
   
@@ -840,45 +822,6 @@ function renderFinalButtons(dateKey, timeKey){
     };
     ctl.appendChild(btnSwitchLocal);
   }
-
-  var btnIos = document.createElement("button");
-  btnIos.className = "cal";
-  btnIos.innerHTML = "📅 Adicionar ao iPhone (Lembretes)";
-  btnIos.onclick = function() {
-    var icsContent = 
-      "BEGIN:VCALENDAR\n" +
-      "VERSION:2.0\n" +
-      "PRODID:-//Barbearia Wilkei LC//PT\n" +
-      "BEGIN:VEVENT\n" +
-      "SUMMARY:" + S.svc[0] + " - Barbearia Wilkei LC\n" +
-      "DESCRIPTION:Seu agendamento na Barbearia Wilkei LC está " + (isPix ? "aguardando comprovante" : "confirmado") + ".\n" +
-      "LOCATION:Barbearia Wilkei LC\n" +
-      "DTSTART:" + fmt(dtStart) + "\n" +
-      "DTEND:" + fmt(dtEnd) + "\n" +
-      "BEGIN:VALARM\n" +
-      "TRIGGER:-PT1H\n" +
-      "ACTION:DISPLAY\n" +
-      "DESCRIPTION:Lembrete de Agendamento\n" +
-      "END:VALARM\n" +
-      "END:VEVENT\n" +
-      "END:VCALENDAR";
-
-    var blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-    var link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', 'agendamento.ics');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-  ctl.appendChild(btnIos);
-
-  var aAndroid = document.createElement("a");
-  aAndroid.className = "cal cal-google";
-  aAndroid.target = "_blank";
-  aAndroid.href = gCalUrl;
-  aAndroid.innerHTML = "📅 Adicionar ao Google Agenda";
-  ctl.appendChild(aAndroid);
 
   var btnCancel = document.createElement("button");
   btnCancel.className = "del-btn";
