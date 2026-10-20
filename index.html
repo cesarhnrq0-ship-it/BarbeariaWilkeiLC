@@ -785,40 +785,26 @@ function confirm2(){
   });
 }
 
-function saveAndFinish(){
-  var dateKey = iso(S.date);
-  var duration = S.svc ? S.svc[2] : 40;
-  var timeKey = S.time.replace(":","");
-
+function switchToLocalPayment(dateKey, timeKey){
   if(db){
-    try {
-      db.ref(DB_PATH + '/' + dateKey + '/' + timeKey).set({
-        nome: S.nome, 
-        tel: S.tel, 
-        servico: S.svc[0], 
-        preco: S.svc[1], 
-        data: lbl(S.date), 
-        hora: S.time,
-        duracao: duration,
-        pagamento: S.pagamento || "LOCAL",
-        pago: S.pago || false
-      });
-    } catch(e){}
+    db.ref(DB_PATH + '/' + dateKey + '/' + timeKey + '/pagamento').set("LOCAL").then(function(){
+      S.pagamento = "LOCAL";
+      say("Perfeito! A sua forma de pagamento foi alterada para 'PAGAR NA BARBEARIA' (Dinheiro/Cartão/PIX na hora).\n\nO seu horário continua garantido na régua 📐!");
+      
+      renderFinalButtons(dateKey, timeKey);
+    });
   }
-  
-  if(S.pagamento === "PIX"){
-    say("⏳ AGUARDANDO COMPROVANTE DO PIX!\n\n⚠️ O seu horário SÓ SERÁ CONFIRMADO após o envio do comprovante no WhatsApp.\n\nCaso o pagamento não seja feito e o comprovante não seja enviado, o agendamento será cancelado pelo barbeiro.\n\n(Se desistir do PIX, cancele abaixo e refaça escolhendo 'Pagar na Barbearia').");
-  } else {
-    say("Tudo pronto! Seu horário tá garantido na régua 📐");
-  }
-  
-  var statusPixMsg = (S.pagamento === "PIX") ? "PIX (Aguardando anexo do comprovante)" : "PAGAR NA BARBEARIA";
+}
+
+function renderFinalButtons(dateKey, timeKey){
+  var isPix = (S.pagamento === "PIX");
+  var statusPixMsg = isPix ? "PIX (Aguardando anexo do comprovante)" : "PAGAR NA BARBEARIA";
   var m = "Olá! Fiz um agendamento pelo site:\n\n" +
           "• Nome: " + S.nome + "\n" +
           "• Serviço: " + S.svc[0] + "\n" +
           "• Data: " + lbl(S.date) + " às " + S.time + "\n" +
           "• Pagamento: " + statusPixMsg + "\n\n" +
-          (S.pagamento === "PIX" ? "📌 Segue em anexo o comprovante de pagamento:" : "");
+          (isPix ? "📌 Segue em anexo o comprovante de pagamento:" : "");
   
   var h = parseInt(S.time.split(":")[0]);
   var min = parseInt(S.time.split(":")[1]);
@@ -838,8 +824,22 @@ function saveAndFinish(){
   var aWa = document.createElement("a");
   aWa.className = "wa"; aWa.target = "_blank";
   aWa.href = "https://wa.me/" + SALON + "?text=" + encodeURIComponent(m);
-  aWa.innerHTML = (S.pagamento === "PIX") ? "📎 Enviar Comprovante no WhatsApp" : "💬 Enviar confirmação no WhatsApp";
+  aWa.innerHTML = isPix ? "📎 Enviar Comprovante no WhatsApp" : "💬 Enviar confirmação no WhatsApp";
   ctl.appendChild(aWa);
+
+  if(isPix){
+    var btnSwitchLocal = document.createElement("button");
+    btnSwitchLocal.className = "cal";
+    btnSwitchLocal.style.background = "var(--card)";
+    btnSwitchLocal.style.borderColor = "var(--accent)";
+    btnSwitchLocal.style.color = "var(--accent)";
+    btnSwitchLocal.style.fontWeight = "800";
+    btnSwitchLocal.innerHTML = "💵 Alterar para Pagar na Barbearia";
+    btnSwitchLocal.onclick = function(){
+      switchToLocalPayment(dateKey, timeKey);
+    };
+    ctl.appendChild(btnSwitchLocal);
+  }
 
   var btnIos = document.createElement("button");
   btnIos.className = "cal";
@@ -851,7 +851,7 @@ function saveAndFinish(){
       "PRODID:-//Barbearia Wilkei LC//PT\n" +
       "BEGIN:VEVENT\n" +
       "SUMMARY:" + S.svc[0] + " - Barbearia Wilkei LC\n" +
-      "DESCRIPTION:Seu agendamento na Barbearia Wilkei LC está aguardando confirmação.\n" +
+      "DESCRIPTION:Seu agendamento na Barbearia Wilkei LC está " + (isPix ? "aguardando comprovante" : "confirmado") + ".\n" +
       "LOCATION:Barbearia Wilkei LC\n" +
       "DTSTART:" + fmt(dtStart) + "\n" +
       "DTEND:" + fmt(dtEnd) + "\n" +
@@ -883,10 +883,46 @@ function saveAndFinish(){
   var btnCancel = document.createElement("button");
   btnCancel.className = "del-btn";
   btnCancel.innerHTML = "❌ Cancelar este Agendamento";
-  btnCancel.onclick = function(){ deleteBooking(dateKey, S.time.replace(":",""), true); };
+  btnCancel.onclick = function(){ deleteBooking(dateKey, timeKey, true); };
   ctl.appendChild(btnCancel);
+}
+
+function saveAndFinish(){
+  var dateKey = iso(S.date);
+  var duration = S.svc ? S.svc[2] : 40;
+  var timeKey = S.time.replace(":","");
+
+  if(db){
+    try {
+      db.ref(DB_PATH + '/' + dateKey + '/' + timeKey).set({
+        nome: S.nome, 
+        tel: S.tel, 
+        servico: S.svc[0], 
+        preco: S.svc[1], 
+        data: lbl(S.date), 
+        hora: S.time,
+        duracao: duration,
+        pagamento: S.pagamento || "LOCAL",
+        pago: S.pago || false
+      });
+    } catch(e){}
+  }
+  
+  if(S.pagamento === "PIX"){
+    say("⏳ AGUARDANDO COMPROVANTE DO PIX!\n\n⚠️ O seu horário SÓ SERÁ CONFIRMADO após o envio do comprovante no WhatsApp.\n\nCaso prefira não fazer o PIX agora, clique no botão 'Alterar para Pagar na Barbearia' abaixo.");
+  } else {
+    say("Tudo pronto! Seu horário tá garantido na régua 📐");
+  }
+  
+  renderFinalButtons(dateKey, timeKey);
 
   if(S.pagamento === "PIX"){
+    var m = "Olá! Fiz um agendamento pelo site:\n\n" +
+            "• Nome: " + S.nome + "\n" +
+            "• Serviço: " + S.svc[0] + "\n" +
+            "• Data: " + lbl(S.date) + " às " + S.time + "\n" +
+            "• Pagamento: PIX (Aguardando anexo do comprovante)\n\n" +
+            "📌 Segue em anexo o comprovante de pagamento:";
     window.open("https://wa.me/" + SALON + "?text=" + encodeURIComponent(m), "_blank");
   }
 }
