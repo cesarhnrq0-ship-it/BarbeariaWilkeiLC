@@ -729,7 +729,7 @@ function getUserData(){
 function selectPaymentMethod(){
   say("Como você deseja realizar o pagamento?");
   chips([
-    {t:"💵 Pagar na Barbearia (Dinheiro/Cartão/PIX)", act:"local"},
+    {t:"💵 Pagar na Barbearia (Dinheiro/Cartão/PIX na hora)", act:"local"},
     {t:"📲 Pagar agora via PIX", act:"pix"}
   ], function(it){
     if(it.act === "local"){
@@ -745,7 +745,7 @@ function selectPaymentMethod(){
 }
 
 function showPixInstructions(){
-  say("Chave PIX da Barbearia:\n" + PIX_KEY + "\n\nValor: R$ " + S.svc[1] + ",00\n\n📌 Faça o PIX no app do seu banco e em seguida clique no botão verde abaixo para enviar o comprovante pelo WhatsApp:");
+  say("Chave PIX da Barbearia:\n" + PIX_KEY + "\n\nValor: R$ " + S.svc[1] + ",00\n\n⚠️ ATENÇÃO OBRIGATÓRIA:\nPara o seu agendamento ser confirmado, é OBRIGATÓRIO enviar a foto ou PDF do comprovante de pagamento no WhatsApp!");
   ctl.innerHTML = "";
   
   var btnCopy = document.createElement("button");
@@ -771,7 +771,7 @@ function showPixInstructions(){
   btnSendProof.className = "send";
   btnSendProof.style.background = "var(--neon-green)";
   btnSendProof.style.color = "#000";
-  btnSendProof.textContent = "📲 Confirmar e Enviar Comprovante";
+  btnSendProof.textContent = "📲 Confirmar e Enviar Comprovante no WhatsApp";
   btnSendProof.onclick = function(){
     saveAndFinish();
   };
@@ -779,7 +779,7 @@ function showPixInstructions(){
 }
 
 function confirm2(){
-  say("Dá uma conferida se tá tudo certo:\n\n• Serviço: "+S.svc[0]+"\n• Data: "+lbl(S.date)+" às "+S.time+"\n• Cliente: "+S.nome+"\n• WhatsApp: "+S.tel+"\n• Pagamento: Na Barbearia (Dinheiro/Cartão/PIX)\n\nPodemos confirmar?");
+  say("Dá uma conferida se tá tudo certo:\n\n• Serviço: "+S.svc[0]+"\n• Data: "+lbl(S.date)+" às "+S.time+"\n• Cliente: "+S.nome+"\n• WhatsApp: "+S.tel+"\n• Pagamento: Pagar na Barbearia\n\nPodemos confirmar?");
   chips([{t:"🔥 Confirmar Agendamento",ok:1},{t:"🔄 Recomeçar",ok:0}],function(it){
     if(it.ok) saveAndFinish(); else start();
   });
@@ -808,12 +808,13 @@ function saveAndFinish(){
   
   say("Tudo pronto! Seu horário tá garantido na régua 📐");
   
-  var statusPixMsg = (S.pagamento === "PIX") ? "PIX REALIZADO (Segue o comprovante em anexo)" : "A pagar na loja";
+  var statusPixMsg = (S.pagamento === "PIX") ? "PIX (Aguardando anexo do comprovante)" : "PAGAR NA BARBEARIA";
   var m = "Olá! Fiz um agendamento pelo site:\n\n" +
           "• Nome: " + S.nome + "\n" +
           "• Serviço: " + S.svc[0] + "\n" +
           "• Data: " + lbl(S.date) + " às " + S.time + "\n" +
-          "• Pagamento: " + statusPixMsg;
+          "• Pagamento: " + statusPixMsg + "\n\n" +
+          (S.pagamento === "PIX" ? "📌 Segue em anexo o comprovante de pagamento:" : "");
   
   var h = parseInt(S.time.split(":")[0]);
   var min = parseInt(S.time.split(":")[1]);
@@ -1323,10 +1324,10 @@ function loadAdminPanel(){
           badgeText = "🟢 PAGO";
           badgeBg = "background:rgba(37,211,102,0.2); color:var(--neon-green);";
         } else if(item.pagamento === "PIX"){
-          badgeText = "⏳ PIX (CONFERIR WHATS)";
+          badgeText = "⚠️ PIX (AGUARDANDO COMPROVANTE)";
           badgeBg = "background:rgba(255,215,0,0.2); color:var(--accent);";
         } else {
-          badgeText = "🟡 PAGAR NA LOJA";
+          badgeText = "💵 PAGAR NA LOJA";
           badgeBg = "background:rgba(142,142,159,0.2); color:var(--mute);";
         }
 
