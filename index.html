@@ -338,6 +338,8 @@ button.del-btn {
 }
 
 .admin-card-badge {
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--accent);
   font-size: 11px;
   font-weight: 800;
   padding: 4px 8px;
@@ -498,6 +500,8 @@ button.del-btn {
 
 <script>
 var db = null;
+var DB_PATH = "agendamentos";
+
 try {
   const firebaseConfig = {
     databaseURL: "https://barbearia-63f58-default-rtdb.firebaseio.com/"
@@ -509,11 +513,11 @@ try {
 }
 
 var SALON = "5511989448738";
-var PIX_KEY = "11989448738";
 var ADMIN_PASS = "123456";
 var currentEditData = null;
 var activeAdminTab = "list";
 
+// [Serviço, Preço, Duração Padrão em Minutos]
 var SV = [
   ["Corte masculino", 40, 40], 
   ["Corte com sobrancelha", 45, 40], 
@@ -649,7 +653,7 @@ function pickTime(){
     
     ctl.innerHTML = "<p style='color:var(--mute); font-size:14px;'>🔍 Consultando horários livres...</p>";
 
-    var fetchBookings = db ? db.ref('agendamentos/' + dateKey).once('value') : Promise.resolve({ val: function(){ return null; } });
+    var fetchBookings = db ? db.ref(DB_PATH + '/' + dateKey).once('value') : Promise.resolve({ val: function(){ return null; } });
 
     fetchBookings.then(function(snapshot){
       var booked = snapshot.val() || {};
@@ -720,64 +724,12 @@ function getUserData(){
     S.nome = inputs.nome.value.trim();
     S.tel = inputs.tel.value.replace(/\D/g,"");
     say(S.nome + " | " + S.tel, "me");
-    selectPaymentMethod();
+    confirm2();
   });
-}
-
-function selectPaymentMethod(){
-  say("Como você deseja realizar o pagamento?");
-  chips([
-    {t:"💵 Pagar na Barbearia (Dinheiro/Cartão/PIX)", act:"local"},
-    {t:"📲 Adiantar via PIX", act:"pix"}
-  ], function(it){
-    if(it.act === "local"){
-      S.pagamento = "LOCAL";
-      S.pago = false;
-      confirm2();
-    } else {
-      S.pagamento = "PIX";
-      S.pago = false;
-      showPixInstructions();
-    }
-  });
-}
-
-function showPixInstructions(){
-  say("Chave PIX da Barbearia:\n" + PIX_KEY + "\n\nValor: R$ " + S.svc[1] + ",00\n\n📌 Faça o PIX no app do seu banco e em seguida clique no botão verde abaixo para enviar o comprovante pelo WhatsApp:");
-  ctl.innerHTML = "";
-  
-  var btnCopy = document.createElement("button");
-  btnCopy.className = "send";
-  btnCopy.style.marginBottom = "10px";
-  btnCopy.textContent = "📋 Copiar Chave PIX";
-  btnCopy.onclick = function(){
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(PIX_KEY);
-    } else {
-      var inp = document.createElement("input");
-      inp.value = PIX_KEY;
-      document.body.appendChild(inp);
-      inp.select();
-      document.execCommand("copy");
-      document.body.removeChild(inp);
-    }
-    alert("Chave PIX copiada!");
-  };
-  ctl.appendChild(btnCopy);
-
-  var btnSendProof = document.createElement("button");
-  btnSendProof.className = "send";
-  btnSendProof.style.background = "var(--neon-green)";
-  btnSendProof.style.color = "#000";
-  btnSendProof.textContent = "📲 Confirmar e Enviar Comprovante";
-  btnSendProof.onclick = function(){
-    saveAndFinish();
-  };
-  ctl.appendChild(btnSendProof);
 }
 
 function confirm2(){
-  say("Dá uma conferida se tá tudo certo:\n\n• Serviço: "+S.svc[0]+"\n• Data: "+lbl(S.date)+" às "+S.time+"\n• Cliente: "+S.nome+"\n• WhatsApp: "+S.tel+"\n• Pagamento: Na Barbearia (Dinheiro/Cartão/PIX)\n\nPodemos confirmar?");
+  say("Dá uma conferida se tá tudo certo:\n\n• Serviço: "+S.svc[0]+"\n• Data: "+lbl(S.date)+" às "+S.time+"\n• Cliente: "+S.nome+"\n• WhatsApp: "+S.tel+"\n\nPodemos confirmar?");
   chips([{t:"🔥 Confirmar Agendamento",ok:1},{t:"🔄 Recomeçar",ok:0}],function(it){
     if(it.ok) saveAndFinish(); else start();
   });
@@ -790,28 +742,21 @@ function saveAndFinish(){
 
   if(db){
     try {
-      db.ref('agendamentos/' + dateKey + '/' + timeKey).set({
+      db.ref(DB_PATH + '/' + dateKey + '/' + timeKey).set({
         nome: S.nome, 
         tel: S.tel, 
         servico: S.svc[0], 
         preco: S.svc[1], 
         data: lbl(S.date), 
         hora: S.time,
-        duracao: duration,
-        pagamento: S.pagamento || "LOCAL",
-        pago: S.pago || false
+        duracao: duration
       });
     } catch(e){}
   }
   
   say("Tudo pronto! Seu horário tá garantido na régua 📐");
   
-  var statusPixMsg = (S.pagamento === "PIX") ? "PIX REALIZADO (Segue o comprovante em anexo abaixo)" : "A pagar na loja";
-  var m = "Olá! Fiz um agendamento pelo site:\n\n" +
-          "• Nome: " + S.nome + "\n" +
-          "• Serviço: " + S.svc[0] + "\n" +
-          "• Data: " + lbl(S.date) + " às " + S.time + "\n" +
-          "• Pagamento: " + statusPixMsg;
+  var m="Olá! Agendei pelo site:\n\nNome: "+S.nome+"\nServiço: "+S.svc[0]+"\nDia: "+lbl(S.date)+" às "+S.time;
   
   var h = parseInt(S.time.split(":")[0]);
   var min = parseInt(S.time.split(":")[1]);
@@ -831,7 +776,7 @@ function saveAndFinish(){
   var aWa = document.createElement("a");
   aWa.className = "wa"; aWa.target = "_blank";
   aWa.href = "https://wa.me/" + SALON + "?text=" + encodeURIComponent(m);
-  aWa.innerHTML = (S.pagamento === "PIX") ? "📎 Enviar Comprovante no WhatsApp" : "💬 Enviar confirmação no WhatsApp";
+  aWa.innerHTML = "💬 Enviar confirmação no WhatsApp";
   ctl.appendChild(aWa);
 
   var btnIos = document.createElement("button");
@@ -878,11 +823,6 @@ function saveAndFinish(){
   btnCancel.innerHTML = "❌ Cancelar este Agendamento";
   btnCancel.onclick = function(){ deleteBooking(dateKey, S.time.replace(":",""), true); };
   ctl.appendChild(btnCancel);
-
-  // Se o pagamento for via PIX, redireciona para o WhatsApp após salvar
-  if(S.pagamento === "PIX"){
-    window.open("https://wa.me/" + SALON + "?text=" + encodeURIComponent(m), "_blank");
-  }
 }
 
 function cancelByClient(){
@@ -896,7 +836,7 @@ function cancelByClient(){
       return;
     }
 
-    db.ref('agendamentos').once('value').then(function(snapshot){
+    db.ref(DB_PATH).once('value').then(function(snapshot){
       var data = snapshot.val();
       var found = [];
       var seenBooking = {};
@@ -942,10 +882,10 @@ function cancelByClient(){
 function deleteBooking(dateKey, timeKey, isClient){
   if(confirm("Tem certeza que deseja remover este item e liberar a agenda?")){
     if(db){
-      db.ref('agendamentos/' + dateKey + '/' + timeKey).once('value').then(function(snap){
+      db.ref(DB_PATH + '/' + dateKey + '/' + timeKey).once('value').then(function(snap){
         var item = snap.val();
         
-        db.ref('agendamentos/' + dateKey).once('value').then(function(daySnap){
+        db.ref(DB_PATH + '/' + dateKey).once('value').then(function(daySnap){
           var dayData = daySnap.val() || {};
           var removes = {};
 
@@ -959,7 +899,7 @@ function deleteBooking(dateKey, timeKey, isClient){
           }
           removes[timeKey] = null;
 
-          db.ref('agendamentos/' + dateKey).update(removes).then(function(){
+          db.ref(DB_PATH + '/' + dateKey).update(removes).then(function(){
             alert("Removido e horário/dia liberado com sucesso!");
             if(isClient) start(); else loadAdminPanel();
           });
@@ -968,14 +908,6 @@ function deleteBooking(dateKey, timeKey, isClient){
     } else {
       alert("Erro de conexão com o banco de dados.");
     }
-  }
-}
-
-function togglePagoStatus(dateKey, timeKey, currentStatus){
-  if(db){
-    db.ref('agendamentos/' + dateKey + '/' + timeKey + '/pago').set(!currentStatus).then(function(){
-      loadAdminPanel();
-    });
   }
 }
 
@@ -1027,7 +959,7 @@ function confirmMoveBooking(){
   var newTimeKey = newTime.replace(":", "");
 
   if(db){
-    db.ref('agendamentos/' + oldDay).once('value').then(function(snapshot){
+    db.ref(DB_PATH + '/' + oldDay).once('value').then(function(snapshot){
       var oldDayData = snapshot.val() || {};
       var removes = {};
 
@@ -1038,7 +970,7 @@ function confirmMoveBooking(){
       }
       removes[oldTimeKey] = null;
 
-      db.ref('agendamentos/' + oldDay).update(removes).then(function(){
+      db.ref(DB_PATH + '/' + oldDay).update(removes).then(function(){
         var updateData = {
           nome: oldItem.nome, 
           tel: oldItem.tel, 
@@ -1046,12 +978,10 @@ function confirmMoveBooking(){
           preco: oldItem.preco, 
           data: newLabel, 
           hora: newTime,
-          duracao: newDur,
-          pagamento: oldItem.pagamento || "LOCAL",
-          pago: oldItem.pago || false
+          duracao: newDur
         };
 
-        db.ref('agendamentos/' + newDate + '/' + newTimeKey).set(updateData).then(function(){
+        db.ref(DB_PATH + '/' + newDate + '/' + newTimeKey).set(updateData).then(function(){
           alert("Agendamento alterado para " + newLabel + " às " + newTime + " (" + newDur + " min)!");
           closeEditModal();
           loadAdminPanel();
@@ -1127,14 +1057,14 @@ function blockSlotOrDay(){
           duracao: 30
         };
       }
-      db.ref('agendamentos/' + dateVal).update(updates).then(function(){
+      db.ref(DB_PATH + '/' + dateVal).update(updates).then(function(){
         alert("Dia " + dateLabel + " bloqueado com sucesso!");
         switchAdminTab('block');
       });
     }
   } else {
     var tk = timeVal.replace(":", "");
-    db.ref('agendamentos/' + dateVal + '/' + tk).set({
+    db.ref(DB_PATH + '/' + dateVal + '/' + tk).set({
       nome: "🚫 HORÁRIO BLOQUEADO",
       tel: "-",
       servico: "Indisponível",
@@ -1192,7 +1122,7 @@ function loadAdminPanel(){
       return;
     }
 
-    db.ref('agendamentos').once('value').then(function(snapshot){
+    db.ref(DB_PATH).once('value').then(function(snapshot){
       var data = snapshot.val();
       var blockStatusElem = document.getElementById('block-status');
       if(!data){
@@ -1242,7 +1172,7 @@ function loadAdminPanel(){
     return;
   }
 
-  db.ref('agendamentos').once('value').then(function(snapshot){
+  db.ref(DB_PATH).once('value').then(function(snapshot){
     var data = snapshot.val();
     var statusElem = document.getElementById('admin-status');
     if(!data){
@@ -1250,32 +1180,14 @@ function loadAdminPanel(){
       return;
     }
     
-    var currentYearMonth = todayIso.substring(0,7);
-    var totalMes = 0;
-    var totalPix = 0;
-    var totalLocal = 0;
-    var qtdAtendimentos = 0;
-
     var cardsHtml = "";
     var seen = {};
     var datesMap = {};
 
     for(var day in data){
-      var isCurrentMonth = day.startsWith(currentYearMonth);
       for(var time in data[day]){
         var item = data[day][time];
         if(!item || item.bloqueado) continue;
-
-        if(isCurrentMonth){
-          var val = item.preco || 0;
-          totalMes += val;
-          if(item.pago || item.pagamento === "PIX"){
-            totalPix += val;
-          } else {
-            totalLocal += val;
-          }
-          qtdAtendimentos++;
-        }
 
         var uniqueKey = day + "_" + item.nome + "_" + item.hora;
         if(seen[uniqueKey]) continue;
@@ -1286,20 +1198,10 @@ function loadAdminPanel(){
       }
     }
 
-    var summaryHtml = "<div class='admin-card' style='background:rgba(255,215,0,0.05); border-color:var(--accent);'>" +
-                        "<div style='font-size:14px; font-weight:800; color:var(--accent); margin-bottom:8px;'>📊 Resumo Financeiro do Mês (" + currentYearMonth + ")</div>" +
-                        "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:13px;'>" +
-                          "<div><b>Faturamento Bruto:</b><br><span style='font-size:16px; color:#fff; font-weight:800;'>R$ " + totalMes + ",00</span></div>" +
-                          "<div><b>Atendimentos:</b><br><span style='font-size:16px; color:#fff; font-weight:800;'>" + qtdAtendimentos + "</span></div>" +
-                          "<div><b>PIX / Confirmado:</b><br><span style='font-size:14px; color:var(--neon-green); font-weight:700;'>R$ " + totalPix + ",00</span></div>" +
-                          "<div><b>A Receber (Loja):</b><br><span style='font-size:14px; color:var(--accent); font-weight:700;'>R$ " + totalLocal + ",00</span></div>" +
-                        "</div>" +
-                      "</div>";
-
     var sortedDays = Object.keys(datesMap).sort();
 
     if(sortedDays.length === 0){
-      statusElem.outerHTML = summaryHtml + "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento de cliente ativo.</p>";
+      statusElem.outerHTML = "<p style='color:var(--mute); text-align:center; margin-top:20px;'>Nenhum agendamento de cliente ativo.</p>";
       return;
     }
 
@@ -1316,35 +1218,18 @@ function loadAdminPanel(){
         var itemJson = encodeURIComponent(JSON.stringify(item));
         var cleanTel = item.tel ? item.tel.replace(/\D/g,"") : "";
 
-        var badgeText = "";
-        var badgeBg = "";
-        if(item.pago){
-          badgeText = "🟢 PAGO";
-          badgeBg = "background:rgba(37,211,102,0.2); color:var(--neon-green);";
-        } else if(item.pagamento === "PIX"){
-          badgeText = "⏳ PIX (CONFERIR WHATS)";
-          badgeBg = "background:rgba(255,215,0,0.2); color:var(--accent);";
-        } else {
-          badgeText = "🟡 PAGAR NA LOJA";
-          badgeBg = "background:rgba(142,142,159,0.2); color:var(--mute);";
-        }
-
-        var btnPagoTxt = item.pago ? "🔴 Desmarcar Pago" : "🟢 Confirmar Pago";
-
         cardsHtml += "<div class='admin-card'>" +
                       "<div class='admin-card-head'>" +
                         "<span class='admin-card-time'>⏰ " + item.hora + "</span>" +
-                        "<span class='admin-card-badge' style='" + badgeBg + "'>" + badgeText + "</span>" +
+                        "<span class='admin-card-badge'>R$ " + (item.preco || 0) + "</span>" +
                       "</div>" +
                       "<div class='admin-card-body'>" +
                         "<b>Cliente:</b> " + item.nome + "<br>" +
-                        "<b>Serviço:</b> " + item.servico + " (" + (item.duracao || getServiceDuration(item.servico)) + " min) - R$ " + (item.preco || 0) + ",00<br>" +
-                        "<b>Forma:</b> " + (item.pagamento === "PIX" ? "PIX Antecipado" : "Pagar na Loja") + "<br>" +
+                        "<b>Serviço:</b> " + item.servico + " (" + (item.duracao || getServiceDuration(item.servico)) + " min)<br>" +
                         "<b>WhatsApp:</b> " + (item.tel || "-") +
                       "</div>" +
                       "<div class='admin-card-actions'>" +
-                        "<button class='btn-admin-act' style='background:rgba(37,211,102,0.15); color:var(--neon-green); border:1px solid var(--neon-green);' onclick=\"togglePagoStatus('"+dayKey+"','"+time+"',"+(item.pago?true:false)+")\">" + btnPagoTxt + "</button>" +
-                        (cleanTel ? "<a href='https://wa.me/55" + cleanTel + "' target='_blank' class='btn-admin-act btn-act-wa'>💬 Whats</a>" : "") +
+                        (cleanTel ? "<a href='https://wa.me/55" + cleanTel + "' target='_blank' class='btn-admin-act btn-act-wa'>💬 WhatsApp</a>" : "") +
                         "<button class='btn-admin-act btn-act-edit' onclick=\"openEditModal('"+dayKey+"','"+time+"','"+itemJson+"')\">✏️ Editar</button>" +
                         "<button class='btn-admin-act btn-act-del' onclick=\"deleteBooking('"+dayKey+"','"+time+"',false)\">🗑️ Cancelar</button>" +
                       "</div>" +
@@ -1352,7 +1237,7 @@ function loadAdminPanel(){
       });
     });
 
-    statusElem.outerHTML = summaryHtml + cardsHtml;
+    statusElem.outerHTML = cardsHtml;
   });
 }
 
