@@ -511,7 +511,7 @@ try {
 }
 
 var SALON = "5511989448738";
-var PIX_KEY = "11989448738"; // Chave PIX da Barbearia
+var PIX_KEY = "11989448738";
 var ADMIN_PASS = "123456";
 var currentEditData = null;
 var activeAdminTab = "list";
@@ -745,7 +745,7 @@ function selectPaymentMethod(){
 }
 
 function showPixInstructions(){
-  say("Chave PIX da Barbearia:\n" + PIX_KEY + "\n\nValor: R$ " + S.svc[1] + ",00\n\n⚠️ ATENÇÃO OBRIGATÓRIA:\nPara o seu agendamento ser confirmado, é OBRIGATÓRIO enviar a foto ou PDF do comprovante de pagamento no WhatsApp!");
+  say("Chave PIX da Barbearia:\n" + PIX_KEY + "\n\nValor: R$ " + S.svc[1] + ",00\n\n⚠️ OBRIGATÓRIO:\nPara o seu agendamento ser validado, você DEVE enviar a foto ou PDF do comprovante no WhatsApp!");
   ctl.innerHTML = "";
   
   var btnCopy = document.createElement("button");
@@ -771,7 +771,7 @@ function showPixInstructions(){
   btnSendProof.className = "send";
   btnSendProof.style.background = "var(--neon-green)";
   btnSendProof.style.color = "#000";
-  btnSendProof.textContent = "📲 Confirmar e Enviar Comprovante no WhatsApp";
+  btnSendProof.textContent = "📲 ENVIAR COMPROVANTE NO WHATSAPP";
   btnSendProof.onclick = function(){
     saveAndFinish();
   };
@@ -806,7 +806,11 @@ function saveAndFinish(){
     } catch(e){}
   }
   
-  say("Tudo pronto! Seu horário tá garantido na régua 📐");
+  if(S.pagamento === "PIX"){
+    say("⏳ AGUARDANDO COMPROVANTE DO PIX!\n\n⚠️ O seu horário SÓ SERÁ CONFIRMADO após o envio do comprovante no WhatsApp.\n\nCaso o pagamento não seja feito e o comprovante não seja enviado, o agendamento será cancelado pelo barbeiro.\n\n(Se desistir do PIX, cancele abaixo e refaça escolhendo 'Pagar na Barbearia').");
+  } else {
+    say("Tudo pronto! Seu horário tá garantido na régua 📐");
+  }
   
   var statusPixMsg = (S.pagamento === "PIX") ? "PIX (Aguardando anexo do comprovante)" : "PAGAR NA BARBEARIA";
   var m = "Olá! Fiz um agendamento pelo site:\n\n" +
@@ -847,7 +851,7 @@ function saveAndFinish(){
       "PRODID:-//Barbearia Wilkei LC//PT\n" +
       "BEGIN:VEVENT\n" +
       "SUMMARY:" + S.svc[0] + " - Barbearia Wilkei LC\n" +
-      "DESCRIPTION:Seu agendamento na Barbearia Wilkei LC está confirmado.\n" +
+      "DESCRIPTION:Seu agendamento na Barbearia Wilkei LC está aguardando confirmação.\n" +
       "LOCATION:Barbearia Wilkei LC\n" +
       "DTSTART:" + fmt(dtStart) + "\n" +
       "DTEND:" + fmt(dtEnd) + "\n" +
@@ -973,12 +977,31 @@ function deleteBooking(dateKey, timeKey, isClient){
   }
 }
 
-function togglePagoStatus(dateKey, timeKey, currentStatus){
-  if(db){
-    db.ref(DB_PATH + '/' + dateKey + '/' + timeKey + '/pago').set(!currentStatus).then(function(){
+function togglePagoStatus(dateKey, timeKey, currentStatusStr){
+  if(!db) return;
+  var isCurrentPaid = (currentStatusStr === 'true' || currentStatusStr === true);
+  var newStatus = !isCurrentPaid;
+
+  db.ref(DB_PATH + '/' + dateKey).once('value').then(function(snap){
+    var dayData = snap.val() || {};
+    var targetItem = dayData[timeKey];
+    var updates = {};
+
+    if(targetItem){
+      for(var tk in dayData){
+        var dItem = dayData[tk];
+        if(dItem && dItem.nome === targetItem.nome && dItem.hora === targetItem.hora){
+          updates[tk + '/pago'] = newStatus;
+        }
+      }
+    } else {
+      updates[timeKey + '/pago'] = newStatus;
+    }
+
+    db.ref(DB_PATH + '/' + dateKey).update(updates).then(function(){
       loadAdminPanel();
     });
-  }
+  });
 }
 
 function openEditModal(oldDay, oldTimeKey, itemJsonStr){
@@ -1268,23 +1291,25 @@ function loadAdminPanel(){
         var item = data[day][time];
         if(!item || item.bloqueado) continue;
 
-        if(isCurrentMonth){
-          var val = item.preco || 0;
-          totalMes += val;
-          if(item.pago || item.pagamento === "PIX"){
-            totalPix += val;
-          } else {
-            totalLocal += val;
-          }
-          qtdAtendimentos++;
-        }
-
         var uniqueKey = day + "_" + item.nome + "_" + item.hora;
         if(seen[uniqueKey]) continue;
         seen[uniqueKey] = true;
 
         if(!datesMap[day]) datesMap[day] = [];
         datesMap[day].push({ timeKey: time, item: item });
+
+        if(isCurrentMonth){
+          var val = parseInt(item.preco, 10) || 0;
+          totalMes += val;
+
+          var isPaid = (item.pago === true || item.pago === "true" || item.pago == 1);
+          if(isPaid){
+            totalPix += val;
+          } else {
+            totalLocal += val;
+          }
+          qtdAtendimentos++;
+        }
       }
     }
 
@@ -1293,8 +1318,8 @@ function loadAdminPanel(){
                         "<div style='display:grid; grid-template-columns: 1fr 1fr; gap:10px; font-size:13px;'>" +
                           "<div><b>Faturamento Bruto:</b><br><span style='font-size:16px; color:#fff; font-weight:800;'>R$ " + totalMes + ",00</span></div>" +
                           "<div><b>Atendimentos:</b><br><span style='font-size:16px; color:#fff; font-weight:800;'>" + qtdAtendimentos + "</span></div>" +
-                          "<div><b>PIX / Confirmado:</b><br><span style='font-size:14px; color:var(--neon-green); font-weight:700;'>R$ " + totalPix + ",00</span></div>" +
-                          "<div><b>A Receber (Loja):</b><br><span style='font-size:14px; color:var(--accent); font-weight:700;'>R$ " + totalLocal + ",00</span></div>" +
+                          "<div><b>Confirmado / PAGO:</b><br><span style='font-size:14px; color:var(--neon-green); font-weight:700;'>R$ " + totalPix + ",00</span></div>" +
+                          "<div><b>A Receber (Pendente):</b><br><span style='font-size:14px; color:var(--accent); font-weight:700;'>R$ " + totalLocal + ",00</span></div>" +
                         "</div>" +
                       "</div>";
 
@@ -1318,20 +1343,22 @@ function loadAdminPanel(){
         var itemJson = encodeURIComponent(JSON.stringify(item));
         var cleanTel = item.tel ? item.tel.replace(/\D/g,"") : "";
 
+        var isPaid = (item.pago === true || item.pago === "true" || item.pago == 1);
         var badgeText = "";
         var badgeBg = "";
-        if(item.pago){
+
+        if(isPaid){
           badgeText = "🟢 PAGO";
           badgeBg = "background:rgba(37,211,102,0.2); color:var(--neon-green);";
         } else if(item.pagamento === "PIX"){
-          badgeText = "⚠️ PIX (AGUARDANDO COMPROVANTE)";
+          badgeText = "⏳ PIX (AGUARDANDO COMPROVANTE)";
           badgeBg = "background:rgba(255,215,0,0.2); color:var(--accent);";
         } else {
           badgeText = "💵 PAGAR NA LOJA";
           badgeBg = "background:rgba(142,142,159,0.2); color:var(--mute);";
         }
 
-        var btnPagoTxt = item.pago ? "🔴 Desmarcar Pago" : "🟢 Confirmar Pago";
+        var btnPagoTxt = isPaid ? "🔴 Desmarcar Pago" : "🟢 Confirmar Pago";
 
         cardsHtml += "<div class='admin-card'>" +
                       "<div class='admin-card-head'>" +
@@ -1345,7 +1372,7 @@ function loadAdminPanel(){
                         "<b>WhatsApp:</b> " + (item.tel || "-") +
                       "</div>" +
                       "<div class='admin-card-actions'>" +
-                        "<button class='btn-admin-act' style='background:rgba(37,211,102,0.15); color:var(--neon-green); border:1px solid var(--neon-green);' onclick=\"togglePagoStatus('"+dayKey+"','"+time+"',"+(item.pago?true:false)+")\">" + btnPagoTxt + "</button>" +
+                        "<button class='btn-admin-act' style='background:rgba(37,211,102,0.15); color:var(--neon-green); border:1px solid var(--neon-green);' onclick=\"togglePagoStatus('"+dayKey+"','"+time+"','"+(isPaid?'true':'false')+"')\">" + btnPagoTxt + "</button>" +
                         (cleanTel ? "<a href='https://wa.me/55" + cleanTel + "' target='_blank' class='btn-admin-act btn-act-wa'>💬 Whats</a>" : "") +
                         "<button class='btn-admin-act btn-act-edit' onclick=\"openEditModal('"+dayKey+"','"+time+"','"+itemJson+"')\">✏️ Editar</button>" +
                         "<button class='btn-admin-act btn-act-del' onclick=\"deleteBooking('"+dayKey+"','"+time+"',false)\">🗑️ Cancelar</button>" +
