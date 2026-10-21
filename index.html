@@ -669,11 +669,16 @@ function pickTime(){
       var items = [];
       var duration = S.svc ? S.svc[2] : 40;
 
-      for(var m = startMin; m <= endMin; m += 30){
+      // Cálculo em passos de 10 minutos para liberar horários exatos como 12:40, 13:20...
+      for(var m = startMin; m <= endMin; m += 10){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var past = (iso(now) === dateKey) && (m <= (now.getHours()*60 + now.getMinutes()));
 
+        if(past) continue;
+
         var isBooked = false;
+        var isExactStart = false;
+
         for(var k in booked){
           var bItem = booked[k];
           if(!bItem) continue;
@@ -683,15 +688,18 @@ function pickTime(){
 
           if(Math.max(m, bStart) < Math.min(m + duration, bEnd)){
             isBooked = true;
+            if(m === bStart) isExactStart = true;
             break;
           }
         }
 
-        items.push({
-          t: isBooked ? t + " (Ocupado)" : t,
-          rawTime: t,
-          off: past || isBooked
-        });
+        if(isBooked){
+          if(isExactStart){
+            items.push({ t: t + " (Ocupado)", rawTime: t, off: true });
+          }
+        } else {
+          items.push({ t: t, rawTime: t, off: false });
+        }
       }
 
       say("Escolha o melhor horário para " + lbl(d) + ":");
