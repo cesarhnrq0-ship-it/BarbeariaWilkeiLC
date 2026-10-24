@@ -662,14 +662,13 @@ function pickTime(){
         endMin = 19 * 60 + 30;
       } else if (dayNum === 6) {
         startMin = 8 * 60 + 30;
-        endMin = 16 * 60 + 30;
+        endMin = 15 * 60 + 40; // Último horário disponível de sábado ajustado para 15:40
       }
 
       var now = new Date(); 
       var items = [];
       var duration = S.svc ? S.svc[2] : 40;
 
-      // Cálculo em passos de 10 minutos para liberar horários exatos como 12:40, 13:20...
       for(var m = startMin; m <= endMin; m += 10){
         var t = String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
         var past = (iso(now) === dateKey) && (m <= (now.getHours()*60 + now.getMinutes()));
