@@ -475,13 +475,13 @@ button.del-btn {
 
     <label style="font-size:12px; font-weight:600;">Tempo de Atendimento:</label>
     <select id="edit-new-duration">
-      <option value="15">15 min (Pezinho)</option>
       <option value="20">20 min (Criança Rápida)</option>
       <option value="30">30 min (Barba)</option>
+      <option value="35">35 min (Corte e Barba)</option>
       <option value="40">40 min (Corte Masculino / Sobrancelha)</option>
       <option value="45">45 min (+15 min extra)</option>
       <option value="50">50 min (+20 min extra)</option>
-      <option value="60">60 min (Corte e Barba / 1h)</option>
+      <option value="60">60 min (1h)</option>
       <option value="75">75 min (+45 min extra)</option>
       <option value="90">90 min (1h30)</option>
     </select>
@@ -515,8 +515,7 @@ var SV = [
   ["Corte masculino", 40, 40], 
   ["Corte com sobrancelha", 45, 40], 
   ["Barba", 30, 30], 
-  ["Corte e barba", 65, 60], 
-  ["Pezinho", 15, 15]
+  ["Corte e barba", 65, 35]
 ];
 var DOW = ["dom","seg","ter","qua","qui","sex","sáb"], MES = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 var S = {}; 
@@ -662,7 +661,7 @@ function pickTime(){
         endMin = 19 * 60 + 30;
       } else if (dayNum === 6) {
         startMin = 8 * 60 + 30;
-        endMin = 15 * 60 + 40; // Último horário disponível de sábado ajustado para 15:40
+        endMin = 15 * 60 + 40;
       }
 
       var now = new Date(); 
